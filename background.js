@@ -326,22 +326,21 @@ async function processQuestion(question, articleContent) {
     }
 
     try {
-        const prompt = `You are a knowledgeable AI assistant helping to answer questions about an article. Consider both your general knowledge and the specific article content when answering.
+        const prompt = `You are a knowledgeable AI assistant helping to answer questions. Your goal is to provide accurate, balanced answers that combine your general knowledge with any relevant information from the provided article.
 
         Question: "${question}"
 
-        Article content:
+        Article content for reference:
         ${articleContent}
 
-        Guidelines:
-        - First, understand what the question is asking in a broader context
-        - Then, look for relevant information in the article
-        - Combine your general knowledge with article-specific information
-        - If the article provides specific details, include them and cite them
-        - If the article lacks information to fully answer the question, supplement with general knowledge while noting what comes from where
-        - Keep the answer concise (2-4 sentences)
-        - Be clear about what information comes from the article versus general knowledge
-        - If the question cannot be answered from the article, say so and provide a general answer`;
+        Guidelines for your response:
+        1. Prioritize your general knowledge and expertise first
+        2. Reference the article only when it contains relevant, specific information that adds value
+        3. Keep your answer concise but thorough - focus on quality over length
+        4. Focus on answering the actual question being asked
+        5. You don't need to explicitly state what comes from where - just provide a natural, informative answer
+
+        Remember: You are a general AI assistant who happens to have access to this article, not an article-specific assistant.`;
 
         const response = await callLLM(prompt);
         return response.trim();

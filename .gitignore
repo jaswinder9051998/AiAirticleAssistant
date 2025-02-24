@@ -25,4 +25,7 @@ package.json
 package-lock.json
 
 # Environment variables
-.env 
+.env
+
+# Build tools
+convert-icons.js 

@@ -26,7 +26,17 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["Readability.js", "content.js"],
+      "js": [
+        "Readability.js",
+        "src/js/utils/StyleInjector.js",
+        "src/js/utils/TextProcessing.js",
+        "src/js/components/Highlights.js",
+        "src/js/components/FloatingCard.js",
+        "src/js/components/QuestionBox.js",
+        "src/js/services/ArticleAssistant.js",
+        "src/js/services/ArticleManager.js",
+        "src/js/index.js"
+      ],
       "css": ["styles.css"]
     }
   ],
