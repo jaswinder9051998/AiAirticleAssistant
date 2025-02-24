@@ -32,6 +32,17 @@ A powerful Chrome extension that enhances article reading with AI-powered insigh
 3. Follow the installation prompts
 
 ### For Development
+There are two ways to install the extension for development:
+
+#### Option 1: Direct Download (Easiest)
+1. Click the green "Code" button at the top of this page
+2. Select "Download ZIP"
+3. Extract the downloaded ZIP file to a folder on your computer
+4. Open Chrome and navigate to `chrome://extensions/`
+5. Enable "Developer mode" in the top right
+6. Click "Load unpacked" and select the extracted folder
+
+#### Option 2: Using Git
 1. Clone the repository:
    ```bash
    git clone https://github.com/jaswinder9051998/AiAirticleAssistant.git
