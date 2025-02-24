@@ -55,7 +55,7 @@
 
 .article-assistant-card-header {
     padding: 12px 16px;
-    background: #4CAF50;
+    background: #388E3C;
     color: white;
     border-radius: 8px 8px 0 0;
     cursor: move;
@@ -198,4 +198,4 @@
 .article-assistant-resize-handle-right:hover,
 .article-assistant-resize-handle-bottom:hover {
     background-color: rgba(76, 175, 80, 0.1);
-} 
+}

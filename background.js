@@ -1,23 +1,21 @@
 let apiKey = '';
 let currentModel = 'google/gemini-2.0-flash-001';
 
-console.log('[Background] Script initialized - ' + new Date().toISOString());
+console.log('[ArticleAssistant] Script initialized - ' + new Date().toISOString());
 
 // Initialize settings on startup
 async function initializeSettings() {
-    console.log('[Background] Initializing settings');
     try {
         const settings = await chrome.storage.local.get(['apiKey', 'model']);
         if (settings.apiKey) {
             apiKey = settings.apiKey;
-            console.log('[Background] API key loaded');
         }
         if (settings.model) {
             currentModel = settings.model;
-            console.log('[Background] Model set to:', currentModel);
+            console.log('[ArticleAssistant] Model configuration loaded');
         }
     } catch (error) {
-        console.error('[Background] Error loading settings:', error);
+        console.error('[ArticleAssistant] Error loading settings');
     }
 }
 
@@ -29,8 +27,8 @@ function safeJSONParse(str) {
     try {
         return { result: JSON.parse(str), error: null };
     } catch (e) {
-        console.error('[Background] JSON parse error:', e);
-        console.log('[Background] Problematic JSON string:', str);
+        console.error('[ArticleAssistant] JSON parse error:', e);
+        console.log('[ArticleAssistant] Problematic JSON string:', str);
         return { result: null, error: e };
     }
 }
@@ -39,27 +37,27 @@ function safeJSONParse(str) {
 function validateResponse(data) {
     // Check if points array exists and is an array
     if (!Array.isArray(data?.points)) {
-        console.error('[Background] Invalid points format:', data);
+        console.error('[ArticleAssistant] Invalid points format:', data);
         return false;
     }
     
     // Check if we have the right number of points
     if (data.points.length < 3 || data.points.length > 5) {
-        console.error('[Background] Invalid number of points:', data.points.length);
+        console.error('[ArticleAssistant] Invalid number of points:', data.points.length);
         return false;
     }
     
     // Check if all points are strings
     for (const point of data.points) {
         if (typeof point !== 'string' || point.trim().length === 0) {
-            console.error('[Background] Invalid point format:', point);
+            console.error('[ArticleAssistant] Invalid point format:', point);
             return false;
         }
     }
     
     // Check if summary exists and is a string
     if (typeof data.summary !== 'string' || data.summary.trim().length === 0) {
-        console.error('[Background] Invalid or missing summary:', data.summary);
+        console.error('[ArticleAssistant] Invalid or missing summary:', data.summary);
         return false;
     }
     
@@ -68,38 +66,52 @@ function validateResponse(data) {
 
 // Test content script communication when a tab is activated
 chrome.tabs.onActivated.addListener(function(activeInfo) {
-    console.log('[Background] Tab activated, testing content script communication');
+    console.log('[ArticleAssistant] Tab activated, testing content script communication');
     chrome.tabs.sendMessage(
         activeInfo.tabId,
         { action: 'test', message: 'Testing content script communication' },
         function(response) {
-            console.log('[Background] Content script test response:', response);
+            console.log('[ArticleAssistant] Content script test response:', response);
             if (chrome.runtime.lastError) {
-                console.error('[Background] Content script communication error:', chrome.runtime.lastError);
+                console.error('[ArticleAssistant] Content script communication error:', chrome.runtime.lastError);
             }
         }
     );
 });
 
+// Add variable to store current article content
+let currentArticleContent = null;
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('[Background] Received message:', request.action, 'from tab:', sender.tab?.id);
-    
     if (request.action === 'processWithLLM') {
-        console.log('[Background] Processing content with LLM, model:', currentModel);
+        console.log('[ArticleAssistant] Processing content with LLM');
         processContent(request.content)
             .then(response => {
-                console.log('[Background] LLM processing successful:', response);
+                console.log('[ArticleAssistant] LLM processing completed');
                 sendResponse(response);
             })
             .catch(error => {
-                console.error('[Background] Error processing content:', error);
+                console.error('[ArticleAssistant] Error processing content');
+                sendResponse({ error: error.message });
+            });
+        return true;
+    } else if (request.action === 'processQuestion') {
+        console.log('[ArticleAssistant] Processing question');
+        if (!request.articleContent && currentArticleContent) {
+            request.articleContent = currentArticleContent;
+        }
+        processQuestion(request.content, request.articleContent)
+            .then(response => {
+                console.log('[ArticleAssistant] Question processing completed');
+                sendResponse({ answer: response });
+            })
+            .catch(error => {
+                console.error('[ArticleAssistant] Error processing question');
                 sendResponse({ error: error.message });
             });
         return true;
     } else if (request.action === 'setApiKey') {
-        console.log('[Background] Setting API key');
         apiKey = request.apiKey;
-        // No need to save to storage here as it's already done in popup.js
         sendResponse({ success: true });
         return true;
     }
@@ -108,227 +120,233 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Listen for settings changes
 chrome.storage.onChanged.addListener(function(changes, namespace) {
     if (namespace === 'local') {
-        console.log('[Background] Settings changed:', changes);
         if (changes.apiKey) {
             apiKey = changes.apiKey.newValue || '';
-            console.log('[Background] API key updated');
         }
         if (changes.model) {
             currentModel = changes.model.newValue;
-            console.log('[Background] Model updated to:', currentModel);
+            console.log('[ArticleAssistant] Model configuration updated');
         }
     }
 });
 
+// Add at the top of the file after the initial declarations
+function relayLog(type, ...args) {
+    // Log locally in background script
+    console[type]('[ArticleAssistant]', ...args);
+    
+    // Relay to all active tabs
+    chrome.tabs.query({active: true}, function(tabs) {
+        tabs.forEach(tab => {
+            chrome.tabs.sendMessage(tab.id, {
+                action: 'log',
+                logType: type,
+                logData: args.map(arg => 
+                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg
+                ).join(' ')
+            }).catch(() => {}); // Ignore errors if tab can't receive messages
+        });
+    });
+}
+
+// Update processContent to store the article content
 async function processContent(content) {
+    // Store the article content for later use
+    currentArticleContent = content.content;
+    
     if (!apiKey) {
-        console.error('[Background] No API key set');
+        relayLog('error', 'No API key set');
         throw new Error('OpenRouter API key not set');
     }
 
     try {
-        console.log('[Background] Sending request to OpenRouter API');
-        console.log('[Background] Content length:', content.content.length);
+        // Step 1: Generate Questions
+        const questionsPrompt = `Based on the following article, generate exactly 3 essential questions.
+
+        Format each question to be specific and focused.
+        Article:
+        ${content.content}
         
-        // More explicit system prompt with examples
-        const systemPrompt = `You are a JSON-only response assistant that helps identify important points in articles and provides a summary.
-You must ALWAYS respond with valid JSON only, using this EXACT format:
+        Return ONLY the numbered questions, one per line.
 
-{
-    "points": [
-        "The United States has committed an additional $1.2 billion in military aid to Ukraine, marking the largest single package this year",
-        "European allies have pledged to match U.S. contributions, bringing the total support to over $2.5 billion",
-        "The aid package includes advanced air defense systems and artillery ammunition, addressing Ukraine's critical battlefield needs"
-    ],
-    "summary": "The article discusses a significant increase in Western military support for Ukraine, with the U.S. leading a coordinated effort alongside European allies to provide comprehensive military assistance, focusing on air defense and artillery capabilities."
-}
+        IMPORTANT GUIDELINES:
+        - Provide exactly 3 questions
+        - Make each question clear and direct
+        - Do not use any ** in your response`;
 
-Critical Formatting Rules:
-1. Start your response with { and end with } - NO OTHER CHARACTERS ALLOWED
-2. DO NOT wrap response in code blocks (no \`\`\`)
-3. DO NOT add language indicators (no 'json' prefix)
-4. DO NOT add any markdown formatting
-5. Points must be EXACT QUOTES from the article
-6. Include 3-5 most important points
-7. Summary should be 1-2 sentences
-8. Use double quotes (") for all strings
-9. Response must be pure JSON that can be parsed by JSON.parse()
+        const questionsResponse = await callLLM(questionsPrompt);
 
-What your response should NOT include:
-❌ \`\`\`json
-❌ \`\`\`
-❌ markdown formatting
-❌ type prefixes
-❌ single quotes
-❌ additional text or explanations
-❌ line numbers
-❌ bullet points or numbering
-
-Your response must start with { and end with } - nothing else!`;
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': 'localhost',
-                'X-Title': 'Article Assistant Extension'
-            },
-            body: JSON.stringify({
-                model: currentModel,
-                messages: [
-                    {
-                        role: "system",
-                        content: systemPrompt
-                    },
-                    {
-                        role: "user",
-                        content: content.content
-                    }
-                ],
-                temperature: 0.3, // Lower temperature for more consistent formatting
-                max_tokens: 1500  // Ensure enough tokens for response
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('[Background] API request failed:', errorData);
-            throw new Error(errorData.error?.message || 'API request failed');
-        }
-
-        // Enhanced cleaning function
-        function cleanResponse(response) {
-            console.log('[Background] Starting response cleaning');
-            console.log('[Background] Original response:', response);
-            
-            let cleaned = response;
-            
-            // Remove markdown code blocks and language indicators
-            cleaned = cleaned.replace(/\`\`\`json\s*/g, '');  // Remove ```json
-            cleaned = cleaned.replace(/\`\`\`\s*/g, '');      // Remove ```
-            cleaned = cleaned.replace(/^json\s*/, '');        // Remove json prefix without backticks
-            
-            // Remove any leading/trailing whitespace
-            cleaned = cleaned.trim();
-            
-            // If response is wrapped in quotes, remove them
-            if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
-                cleaned = cleaned.slice(1, -1);
-            }
-            
-            // Find the first { and last }
-            const firstBrace = cleaned.indexOf('{');
-            const lastBrace = cleaned.lastIndexOf('}');
-            
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-            }
-            
-            console.log('[Background] Cleaned response:', cleaned);
-            
-            // Verify the cleaned response starts with { and ends with }
-            if (!cleaned.startsWith('{') || !cleaned.endsWith('}')) {
-                console.error('[Background] Cleaning failed to produce valid JSON structure');
-                throw new Error('Failed to clean response into valid JSON format');
-            }
-            
-            return cleaned;
-        }
-
-        // Update the response cleaning section
-        const rawResponseText = await response.text();
-        console.log('[Background] Raw OpenRouter response text:', rawResponseText);
+        // Step 2: Generate Answers
+        const answersPrompt = `Provide concise answers to these questions about the article. Keep each answer to 3-4 sentences maximum.
         
-        // Add detailed format analysis logging
-        console.log('[Background] Response prefix check:', {
-            firstFiveChars: rawResponseText.substring(0, 5),
-            hasJsonPrefix: rawResponseText.startsWith('json'),
-            hasQuotedJsonPrefix: rawResponseText.startsWith('"json'),
-            hasCodeBlock: rawResponseText.includes('```'),
-            firstCurlyBrace: rawResponseText.indexOf('{'),
-            lastCurlyBrace: rawResponseText.lastIndexOf('}'),
-            firstValidJSONChar: rawResponseText.search(/[{[]/)
-        });
+        Article:
+        ${content.content}
+        
+        Questions:
+        ${questionsResponse}
+        
+        Format your response exactly as follows:
 
-        // Clean the response
-        let cleanedResponse = cleanResponse(rawResponseText);
-        console.log('[Background] Cleaned response for parsing:', cleanedResponse);
-        
-        // Parse the cleaned response text
-        let data;
-        try {
-            data = JSON.parse(cleanedResponse);
-            console.log('[Background] Successfully parsed cleaned response');
-        } catch (error) {
-            console.error('[Background] Parse error after cleaning:', error);
-            console.log('[Background] Failed to parse cleaned response:', {
-                startsWithCurlyBrace: cleanedResponse.trimStart().startsWith('{'),
-                endsWithCurlyBrace: cleanedResponse.trimEnd().endsWith('}'),
-                length: cleanedResponse.length,
-                firstFewChars: cleanedResponse.substring(0, 20),
-                lastFewChars: cleanedResponse.slice(-20)
-            });
-            throw new Error('Failed to parse OpenRouter response');
-        }
-        
-        console.log('[Background] Parsed OpenRouter response:', data);
-        
-        // Extract and clean the LLM response
-        const llmResponse = data.choices[0].message.content.trim();
-        console.log('[Background] Raw LLM response:', llmResponse);
-        
-        // Check if response starts and ends with curly braces
-        if (!llmResponse.startsWith('{') || !llmResponse.endsWith('}')) {
-            console.error('[Background] Response is not JSON formatted:', llmResponse);
-            throw new Error('LLM response is not in JSON format');
-        }
+        💡 MAIN POINTS
+        Q: [Question]
+        A: [3-4 sentence answer]
 
-        // Try to parse the response as JSON
-        let parsedResponse;
-        try {
-            parsedResponse = JSON.parse(llmResponse);
-            console.log('[Background] Successfully parsed JSON:', parsedResponse);
-        } catch (error) {
-            console.error('[Background] JSON parse error:', error);
-            console.log('[Background] Failed JSON string:', llmResponse);
-            
-            // Try to clean the response
-            const cleanedResponse = llmResponse
-                .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-                .replace(/\\'/g, "'")                          // Fix escaped single quotes
-                .replace(/\\"/g, '"')                         // Fix escaped double quotes
-                .replace(/`/g, '"')                           // Replace backticks with double quotes
-                .replace(/\n/g, ' ');                         // Remove newlines
-            
-            console.log('[Background] Cleaned response:', cleanedResponse);
-            
-            try {
-                parsedResponse = JSON.parse(cleanedResponse);
-                console.log('[Background] Successfully parsed cleaned JSON:', parsedResponse);
-            } catch (secondError) {
-                console.error('[Background] Failed to parse cleaned JSON:', secondError);
-                throw new Error('Failed to parse LLM response as JSON');
-            }
-        }
+        Guidelines:
+        - Keep answers focused but thorough (3-4 sentences)
+        - Use clear, direct language
+        - Avoid repetition
+        - Include only the most important information`;
+
+        const answersResponse = await callLLM(answersPrompt);
+
+        // Step 3: Extract Quotes
+        const quotesPrompt = `Based on the following article and answers, provide 3 exact quotes from the text that best support the key points discussed.
+
+        Article:
+        ${content.content}
+
+        Analysis:
+        ${answersResponse}
+
+        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support one of the main points.
+
+        Format:
+        1. "exact quote from text"
+        2. "exact quote from text"
+        3. "exact quote from text"`;
+
+        const quotesResponse = await callLLM(quotesPrompt);
+
+        // Format the final response as JSON
+        const finalResponse = {
+            points: extractQuotes(quotesResponse),
+            summary: answersResponse
+        };
 
         // Validate the response format
-        if (!validateResponse(parsedResponse)) {
-            console.error('[Background] Invalid response structure:', parsedResponse);
+        if (!validateResponse(finalResponse)) {
+            relayLog('error', 'Invalid response structure:', finalResponse);
             throw new Error('Invalid response format from LLM');
         }
 
-        console.log('[Background] Final validated response:', {
-            points: parsedResponse.points,
-            summary: parsedResponse.summary
-        });
-        
-        return {
-            points: parsedResponse.points,
-            summary: parsedResponse.summary
-        };
+        return finalResponse;
     } catch (error) {
-        console.error('[Background] Error calling OpenRouter API:', error);
+        relayLog('error', 'Error in content processing:', error);
+        throw error;
+    }
+}
+
+// Update callLLM function to be more concise in logging
+async function callLLM(prompt) {
+    const requestBody = {
+        model: currentModel,
+        messages: [
+            {
+                role: "user",
+                content: prompt
+            }
+        ],
+        temperature: 0.3,
+        max_tokens: 1500
+    };
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'localhost',
+            'X-Title': 'Article Assistant Extension'
+        },
+        body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[ArticleAssistant] API request failed');
+        throw new Error('API request failed');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+}
+
+// Helper function to extract quotes from the response
+function extractQuotes(quotesResponse) {
+    const quotes = quotesResponse
+        .split('\n')
+        .filter(line => line.trim().match(/^\d+\.\s*".*"$/))
+        .map(line => {
+            const match = line.match(/^\d+\.\s*"(.+)"$/);
+            return match ? match[1] : null;
+        })
+        .filter(quote => quote !== null);
+
+    return quotes;
+}
+
+// Add a new function to process custom questions
+async function processCustomQuestion(content, question) {
+    if (!apiKey) {
+        relayLog('error', 'No API key set');
+        throw new Error('OpenRouter API key not set');
+    }
+
+    try {
+        // Create a prompt for the custom question
+        const customQuestionPrompt = `Based on the following article, please answer this question:
+        
+        Question: ${question}
+        
+        Article:
+        ${content.content}
+        
+        Please provide a clear, concise, and accurate answer based solely on the information in the article.
+        If the article doesn't contain information to answer the question, please state that clearly.
+        
+        Format your answer in 3-4 sentences maximum, using clear and direct language.`;
+
+        const answer = await callLLM(customQuestionPrompt);
+
+        return { answer };
+    } catch (error) {
+        relayLog('error', 'Error processing custom question:', error);
+        throw error;
+    }
+}
+
+// Update processQuestion to use article content
+async function processQuestion(question, articleContent) {
+    if (!apiKey) {
+        throw new Error('OpenRouter API key not set');
+    }
+
+    if (!articleContent) {
+        throw new Error('No article content available. Please reload the article and try again.');
+    }
+
+    try {
+        const prompt = `You are a knowledgeable AI assistant helping to answer questions about an article. Consider both your general knowledge and the specific article content when answering.
+
+        Question: "${question}"
+
+        Article content:
+        ${articleContent}
+
+        Guidelines:
+        - First, understand what the question is asking in a broader context
+        - Then, look for relevant information in the article
+        - Combine your general knowledge with article-specific information
+        - If the article provides specific details, include them and cite them
+        - If the article lacks information to fully answer the question, supplement with general knowledge while noting what comes from where
+        - Keep the answer concise (2-4 sentences)
+        - Be clear about what information comes from the article versus general knowledge
+        - If the question cannot be answered from the article, say so and provide a general answer`;
+
+        const response = await callLLM(prompt);
+        return response.trim();
+    } catch (error) {
+        console.error('[ArticleAssistant] Error in question processing:', error);
         throw error;
     }
 } 
