@@ -22,17 +22,21 @@ yarn-error.log*
 dist/
 build/
 
-# Node.js files
-package.json
-package-lock.json
+# Development files
+.git/
+.gitignore
+convert-icons.js
+create_zip.js
+*.md
+LICENSE
 
 # Environment variables
 .env
 
-# Build tools
-convert-icons.js
-
 # Temporary files
 *.tmp
 *.temp
-*.swp 
+*.swp
+
+# Source maps
+*.map 

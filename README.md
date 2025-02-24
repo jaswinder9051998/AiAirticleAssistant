@@ -117,6 +117,51 @@ A powerful Chrome extension that enhances article reading with AI-powered insigh
 2. Navigate to any article
 3. Test features and functionality
 
+## Publishing to Chrome Web Store
+
+### Prerequisites
+1. Register as a Chrome Web Store developer:
+   - Visit the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+   - Pay one-time registration fee ($5)
+   - Complete developer verification
+
+### Preparation
+1. Create a ZIP file of your extension:
+   - Include all necessary files
+   - Exclude development files (.git, node_modules, etc.)
+   - Ensure manifest.json is properly configured
+
+### Store Listing
+1. Create graphics:
+   - Store icon (128x128)
+   - Screenshots (1280x800 or 640x400)
+   - Promotional images (optional)
+2. Prepare content:
+   - Detailed description
+   - Privacy policy
+   - Website/Support links
+
+### Submission Process
+1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+2. Click "New Item"
+3. Upload your ZIP file
+4. Fill in:
+   - Store listing details
+   - Privacy practices
+   - Payment and distribution
+5. Submit for review
+
+### Review Process
+- Initial review takes 2-3 business days
+- Address any feedback from the review team
+- Once approved, extension will be published
+
+### Post-Publication
+1. Monitor user feedback and ratings
+2. Respond to user reviews
+3. Plan regular updates
+4. Track usage metrics
+
 ## Contributing
 
 1. Fork the repository

@@ -9,20 +9,56 @@ class QuestionBox {
         // Get the main card's position
         const mainCardRect = this.floatingCard.card.getBoundingClientRect();
         
+        // Calculate available space below and above the main card
+        const spaceBelow = window.innerHeight - mainCardRect.bottom;
+        const spaceAbove = mainCardRect.top;
+        
         // Create question box
         this.box = document.createElement('div');
         this.box.className = 'article-assistant-question-box';
-        this.box.style.cssText = `
-            position: fixed;
-            top: ${mainCardRect.bottom + 10}px;
-            right: ${window.innerWidth - mainCardRect.right}px;
-            width: ${mainCardRect.width}px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            padding: 16px;
-            z-index: 999999;
-        `;
+
+        // Determine if box should appear above or below based on available space
+        const minimumBoxHeight = 200;
+        const margin = 10;
+        const shouldShowAbove = spaceBelow < minimumBoxHeight && spaceAbove > spaceBelow;
+
+        // Position the box
+        if (shouldShowAbove) {
+            // When showing above, position from the top instead of bottom
+            const maxHeight = Math.min(spaceAbove - margin, 400); // Cap max height
+            const topPosition = Math.max(margin, mainCardRect.top - maxHeight - margin);
+            
+            this.box.style.cssText = `
+                position: fixed !important;
+                top: ${topPosition}px !important;
+                right: ${window.innerWidth - mainCardRect.right}px !important;
+                width: ${mainCardRect.width}px !important;
+                background: white !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                padding: 16px !important;
+                z-index: 999999 !important;
+                max-height: ${maxHeight}px !important;
+                overflow-y: auto !important;
+            `;
+        } else {
+            const maxHeight = Math.min(window.innerHeight - (mainCardRect.bottom + margin) - margin, 400);
+            const topPosition = Math.min(mainCardRect.bottom + margin, window.innerHeight - maxHeight - margin);
+            
+            this.box.style.cssText = `
+                position: fixed !important;
+                top: ${topPosition}px !important;
+                right: ${window.innerWidth - mainCardRect.right}px !important;
+                width: ${mainCardRect.width}px !important;
+                background: white !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                padding: 16px !important;
+                z-index: 999999 !important;
+                max-height: ${maxHeight}px !important;
+                overflow-y: auto !important;
+            `;
+        }
 
         // Create header
         const header = this.createHeader();
@@ -39,8 +75,42 @@ class QuestionBox {
         // Add to page
         document.body.appendChild(this.box);
 
+        // Ensure the box is fully visible
+        this.adjustPosition();
+
+        // Add window resize handler
+        window.addEventListener('resize', () => this.adjustPosition());
+
         // Focus the textarea
         setTimeout(() => textarea.focus(), 100);
+    }
+
+    adjustPosition() {
+        if (!this.box) return;
+
+        const boxRect = this.box.getBoundingClientRect();
+        const mainCardRect = this.floatingCard.card.getBoundingClientRect();
+
+        // Ensure the box doesn't extend beyond screen boundaries
+        if (boxRect.right > window.innerWidth) {
+            this.box.style.right = '10px';
+            this.box.style.left = 'auto';
+        }
+
+        if (boxRect.bottom > window.innerHeight) {
+            const newTop = window.innerHeight - boxRect.height - 10;
+            this.box.style.top = `${Math.max(10, newTop)}px`;
+        }
+
+        // Ensure minimum width
+        const minWidth = 300;
+        if (boxRect.width < minWidth) {
+            this.box.style.width = `${minWidth}px`;
+        }
+
+        // Update max-height based on available space
+        const availableHeight = window.innerHeight - boxRect.top - 10;
+        this.box.style.maxHeight = `${availableHeight}px`;
     }
 
     createHeader() {
