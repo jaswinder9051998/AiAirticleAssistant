@@ -1,0 +1,201 @@
+.article-assistant-highlight {
+    background-color: rgba(76, 175, 80, 0.2);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.article-assistant-highlight:hover {
+    background-color: rgba(76, 175, 80, 0.4);
+}
+
+.article-assistant-tooltip {
+    position: absolute;
+    z-index: 1000;
+    background-color: #333;
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    max-width: 300px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.article-assistant-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 0 5px 5px;
+    border-style: solid;
+    border-color: transparent transparent #333;
+}
+
+.article-assistant-floating-card {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    min-width: 200px;
+    min-height: 150px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    z-index: 10000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    transition: opacity 0.2s ease;
+    overflow: visible;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.article-assistant-floating-card:hover {
+    outline: 2px solid rgba(76, 175, 80, 0.3);
+}
+
+.article-assistant-card-header {
+    padding: 12px 16px;
+    background: #4CAF50;
+    color: white;
+    border-radius: 8px 8px 0 0;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.article-assistant-card-title {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.article-assistant-card-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.article-assistant-card-button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.article-assistant-card-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.article-assistant-card-content {
+    padding: 16px;
+    max-height: calc(70vh - 15px);
+    overflow-y: auto;
+    height: calc(100% - 50px);
+}
+
+.article-assistant-summary {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+}
+
+.article-assistant-points {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.article-assistant-point {
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.article-assistant-point:hover {
+    background: #e0e0e0;
+}
+
+.article-assistant-point.active {
+    background: #e8f5e9;
+    border-left: 3px solid #4CAF50;
+}
+
+.article-assistant-minimized {
+    width: auto;
+    min-width: 120px;
+    resize: none;
+    overflow: hidden;
+}
+
+.article-assistant-minimized .article-assistant-card-content {
+    display: none;
+}
+
+/* Animation for minimize/maximize */
+.article-assistant-floating-card {
+    transition: width 0.3s ease, opacity 0.2s ease;
+}
+
+/* Styles for the highlight spans */
+.article-assistant-highlight {
+    background-color: rgba(76, 175, 80, 0.2);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.article-assistant-highlight:hover {
+    background-color: rgba(76, 175, 80, 0.4);
+}
+
+/* Left resize handle */
+.article-assistant-resize-handle-left {
+    position: absolute;
+    left: -5px;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 1;
+}
+
+/* Right resize handle */
+.article-assistant-resize-handle-right {
+    position: absolute;
+    right: -5px;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 1;
+}
+
+/* Bottom resize handle */
+.article-assistant-resize-handle-bottom {
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    cursor: ns-resize;
+    z-index: 1;
+}
+
+/* Hover effect for resize handles */
+.article-assistant-resize-handle-left:hover,
+.article-assistant-resize-handle-right:hover,
+.article-assistant-resize-handle-bottom:hover {
+    background-color: rgba(76, 175, 80, 0.1);
+} 
