@@ -1,5 +1,7 @@
 # Article Assistant Chrome Extension
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=flat-square&logo=buymeacoffee)](https://buymeacoffee.com/jaswinder9051998)
+
 A powerful Chrome extension that enhances article reading with AI-powered insights, summaries, and interactive Q&A capabilities.
 
 ## Features
