@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+package.json
+package-lock.json
 
 # IDE files
 .vscode/
@@ -28,4 +30,9 @@ package-lock.json
 .env
 
 # Build tools
-convert-icons.js 
+convert-icons.js
+
+# Temporary files
+*.tmp
+*.temp
+*.swp 
