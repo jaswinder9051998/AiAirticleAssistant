@@ -235,7 +235,8 @@ class FloatingCard {
                 
                 const answer = document.createElement('div');
                 answer.className = 'article-assistant-answer';
-                answer.textContent = parts[1];
+                // Use Markdown parsing for the answer
+                answer.innerHTML = this.parseMarkdown(parts[1]);
                 
                 qaDiv.appendChild(question);
                 qaDiv.appendChild(answer);
@@ -490,13 +491,58 @@ class FloatingCard {
 
         const answerEl = document.createElement('div');
         answerEl.className = 'article-assistant-answer';
-        answerEl.textContent = answer;
+        
+        // Use Markdown parsing for the answer
+        answerEl.innerHTML = this.parseMarkdown(answer);
 
         qaDiv.appendChild(questionEl);
         qaDiv.appendChild(answerEl);
         customQAContainer.appendChild(qaDiv);
 
         qaDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    // Simple Markdown parser
+    parseMarkdown(text) {
+        if (!text) return '';
+        
+        console.log('[ArticleAssistant] Parsing markdown for text:', text.substring(0, 50) + '...');
+        
+        // Replace ** or __ for bold
+        let parsed = text.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+        
+        // Replace * or _ for italic
+        parsed = parsed.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+        
+        // Replace backticks for code
+        parsed = parsed.replace(/`([^`]+)`/g, '<code>$1</code>');
+        
+        // Replace triple backticks for code blocks
+        parsed = parsed.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        
+        // Replace bullet points
+        parsed = parsed.replace(/^\s*[\*\-]\s+(.*?)$/gm, '<li>$1</li>');
+        
+        // Wrap adjacent list items in ul tags
+        parsed = parsed.replace(/(<li>.*?<\/li>)(?:\s*\n\s*)?(?=<li>)/g, '$1');
+        parsed = parsed.replace(/(?:^|\n)(<li>.*?<\/li>)(?:\s*\n\s*)?(?:<li>.*?<\/li>)*/g, '\n<ul>$&\n</ul>');
+        
+        // Replace numbered lists
+        parsed = parsed.replace(/^\s*(\d+)\.\s+(.*?)$/gm, '<li>$2</li>');
+        
+        // Replace headers (## Header)
+        parsed = parsed.replace(/^##\s+(.*?)$/gm, '<h2>$1</h2>');
+        parsed = parsed.replace(/^###\s+(.*?)$/gm, '<h3>$1</h3>');
+        
+        // Replace paragraphs (lines with a blank line before and after)
+        parsed = parsed.replace(/\n\n([^<].*?)\n\n/g, '\n\n<p>$1</p>\n\n');
+        
+        // Replace single newlines with <br>
+        parsed = parsed.replace(/([^>\n])\n([^<])/g, '$1<br>$2');
+        
+        console.log('[ArticleAssistant] Parsed markdown result:', parsed.substring(0, 50) + '...');
+        
+        return parsed;
     }
 
     setupTextSelectionHandler(onAskButtonClick) {

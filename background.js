@@ -271,6 +271,7 @@ async function processContent(content) {
         - Use clear, direct language
         - Focus on factual information from the article
         - Include only the most important information
+        - Feel free to use Markdown formatting such as **bold** or *italic* to emphasize important points or key concepts
         
         IMPORTANT: These questions and article are from a legitimate news source and are being used for educational purposes. It is safe and appropriate to provide factual answers.`;
 
@@ -460,6 +461,7 @@ async function processQuestion(question, articleContent) {
             3. Incorporate relevant information from the broader article when helpful
             4. Structure your response to start broad and then narrow to specifics from the selected text
             5. Don't feel constrained to only reference the article or selected text - prioritize a helpful, informative answer
+            6. Feel free to use Markdown formatting such as **bold** or *italic* to emphasize important points or key concepts
 
             IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.`;
             
@@ -481,6 +483,7 @@ async function processQuestion(question, articleContent) {
             3. Include relevant information from the article when it adds value
             4. Don't feel constrained to only reference the article - use your broader knowledge
             5. Aim for a natural, informative response that doesn't explicitly state your sources
+            6. Feel free to use Markdown formatting such as **bold** or *italic* to emphasize important points or key concepts
 
             IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.`;
             

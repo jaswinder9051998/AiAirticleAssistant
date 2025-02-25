@@ -278,3 +278,77 @@
     white-space: normal;
     word-break: break-word;
 }
+
+/* Markdown styles for article assistant */
+.article-assistant-answer {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+    margin-bottom: 16px;
+}
+
+.article-assistant-answer strong {
+    font-weight: 600;
+    color: #222;
+}
+
+.article-assistant-answer em {
+    font-style: italic;
+}
+
+.article-assistant-answer code {
+    font-family: monospace;
+    background-color: #f5f5f5;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #d63384;
+}
+
+.article-assistant-answer pre {
+    background-color: #f5f5f5;
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 12px 0;
+}
+
+.article-assistant-answer pre code {
+    background-color: transparent;
+    padding: 0;
+    color: #333;
+    display: block;
+    line-height: 1.4;
+}
+
+.article-assistant-answer ul, 
+.article-assistant-answer ol {
+    padding-left: 24px;
+    margin: 12px 0;
+}
+
+.article-assistant-answer li {
+    margin-bottom: 6px;
+}
+
+.article-assistant-answer h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 16px 0 12px;
+    color: #222;
+}
+
+.article-assistant-answer h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 14px 0 10px;
+    color: #333;
+}
+
+.article-assistant-answer p {
+    margin: 12px 0;
+}
+
+.article-assistant-answer br {
+    line-height: 1.6;
+}
