@@ -3,6 +3,8 @@ class ArticleAssistant {
         this.floatingCard = null;
         this.highlights = new Highlights();
         this.initialized = false;
+        this.cardWasClosed = false;
+        this.lastCardData = null;
     }
 
     async initializeAsync() {
@@ -43,8 +45,27 @@ class ArticleAssistant {
                 throw new Error('Invalid response format from background script');
             }
 
+            // Store the card data for potential reopening later
+            this.lastCardData = {
+                summary: response.summary,
+                points: response.points
+            };
+            
+            // Reset the closed state when creating a new card
+            this.cardWasClosed = false;
+
             // Create floating card first
             this.floatingCard = new FloatingCard();
+            
+            // Add a method to track when the card is closed
+            const originalRemove = this.floatingCard.remove;
+            this.floatingCard._originalRemove = originalRemove; // Store for later use
+            this.floatingCard.remove = () => {
+                console.log('[ArticleAssistant] Floating card being removed, setting cardWasClosed flag');
+                this.cardWasClosed = true;
+                originalRemove.call(this.floatingCard);
+            };
+            
             this.floatingCard.create(
                 response.summary, 
                 response.points,
@@ -122,71 +143,83 @@ class ArticleAssistant {
         }
     }
 
-    createAndShowQuestionBox() {
-        console.log('[ArticleAssistant] Creating question box...');
-        
+    createAndShowQuestionBox(selectedText = null) {
         try {
-            // Define onSubmitHandler separately for easier debugging
-            const onSubmitHandler = (question) => {
-                console.log('[ArticleAssistant] onSubmitHandler called with question:', question);
+            // Check for globally stored selected text if none was passed
+            if (!selectedText && window.articleAssistantSelectedText) {
+                selectedText = window.articleAssistantSelectedText;
+                console.log('[ArticleAssistant] Retrieved selected text from global storage:', selectedText.substring(0, 50) + '...');
+            }
+            
+            console.log('[ArticleAssistant] Creating question box with selected text:', selectedText ? 'yes, length: ' + selectedText.length : 'no');
+            
+            // Store the selected text for later use
+            this.currentSelectedText = selectedText;
+            
+            // Check if the floating card was closed and needs to be reopened
+            if (this.cardWasClosed || !this.floatingCard) {
+                console.log('[ArticleAssistant] Card was closed or doesn\'t exist, reopening it');
                 
-                try {
-                    console.log('[ArticleAssistant] Extracting page content...');
-                    const pageContent = this.extractPageContent();
-                    console.log('[ArticleAssistant] Page content extracted, length:', pageContent ? pageContent.length : 0);
+                if (this.lastCardData) {
+                    console.log('[ArticleAssistant] Recreating card with stored data');
+                    this.floatingCard = new FloatingCard();
                     
-                    if (!pageContent) {
-                        const error = new Error('Failed to extract page content');
-                        console.error('[ArticleAssistant] ' + error.message);
-                        throw error;
-                    }
+                    // Add a method to track when the card is closed
+                    const originalRemove = this.floatingCard.remove;
+                    this.floatingCard._originalRemove = originalRemove; // Store for later use
+                    this.floatingCard.remove = () => {
+                        console.log('[ArticleAssistant] Floating card being removed, setting cardWasClosed flag');
+                        this.cardWasClosed = true;
+                        originalRemove.call(this.floatingCard);
+                    };
                     
-                    console.log('[ArticleAssistant] Sending message to background: PROCESS_QUESTION');
-                    chrome.runtime.sendMessage({
-                        action: 'PROCESS_QUESTION',
-                        question: question,
-                        articleContent: pageContent
-                    }, (response) => {
-                        console.log('[ArticleAssistant] Received response from background:', response);
-                        
-                        if (!response) {
-                            const error = new Error('No response from background script');
-                            console.error('[ArticleAssistant] ' + error.message);
-                            throw error;
-                        }
-                        
-                        if (response.error) {
-                            const error = new Error(response.error);
-                            console.error('[ArticleAssistant] Background script error:', error.message);
-                            throw error;
-                        }
-                        
-                        console.log('[ArticleAssistant] Adding custom Q&A to floating card');
-                        this.floatingCard.addCustomQA(question, response.answer);
-                        console.log('[ArticleAssistant] Q&A added successfully');
-                        
-                        // Hide the question box after successful submission
-                        if (this.questionBox) {
-                            this.questionBox.remove();
-                            this.questionBox = null;
-                        }
-                    });
+                    this.floatingCard.create(
+                        this.lastCardData.summary,
+                        this.lastCardData.points,
+                        () => this.createAndShowQuestionBox()
+                    );
                     
-                    return true;
-                } catch (error) {
-                    console.error('[ArticleAssistant] Error in onSubmitHandler:', error);
-                    throw error;
+                    // Reset the closed state
+                    this.cardWasClosed = false;
+                } else {
+                    console.error('[ArticleAssistant] No card data available for reopening');
+                    // Create a minimal card if we don't have the previous data
+                    this.floatingCard = new FloatingCard();
+                    this.floatingCard.create(
+                        "Article Assistant",
+                        [],
+                        () => this.createAndShowQuestionBox()
+                    );
                 }
-            };
+            }
             
-            console.log('[ArticleAssistant] onSubmitHandler type:', typeof onSubmitHandler);
-            
-            // Important: Remove any existing question box first
+            // Remove existing question box if any
             if (this.questionBox) {
                 console.log('[ArticleAssistant] Removing existing question box');
                 this.questionBox.remove();
                 this.questionBox = null;
             }
+            
+            // Define the submit handler
+            const onSubmitHandler = (question, contextText = null) => {
+                console.log('[ArticleAssistant] Question submitted:', question);
+                
+                // Use either the context text passed from the question box, the stored selected text, or the global variable
+                const finalContextText = contextText || this.currentSelectedText || window.articleAssistantSelectedText;
+                console.log('[ArticleAssistant] Context text for processing:', finalContextText ? 'yes, length: ' + finalContextText.length : 'no');
+                
+                // Hide the question box
+                if (this.questionBox) {
+                    console.log('[ArticleAssistant] Hiding question box');
+                    this.questionBox.remove();
+                    this.questionBox = null;
+                }
+                
+                // Process the question with the context
+                this.processQuestion(question, finalContextText);
+                
+                return true;
+            };
             
             // Also check for any orphaned question boxes in the DOM
             const existingBoxes = document.querySelectorAll('.article-assistant-question-box');
@@ -196,8 +229,8 @@ class ArticleAssistant {
             }
             
             // Create and show the question box
-            console.log('[ArticleAssistant] Creating QuestionBox with onSubmitHandler');
-            this.questionBox = new QuestionBox(this.floatingCard, onSubmitHandler);
+            console.log('[ArticleAssistant] Creating QuestionBox with onSubmitHandler and selectedText:', selectedText ? 'yes' : 'no');
+            this.questionBox = new QuestionBox(this.floatingCard, onSubmitHandler, selectedText);
             
             // Verify the question box was created
             if (!this.questionBox) {
@@ -241,12 +274,102 @@ class ArticleAssistant {
         }
     }
 
+    processQuestion(question, contextText = null) {
+        console.log('[ArticleAssistant] Processing question:', question);
+        console.log('[ArticleAssistant] Context text provided:', contextText ? 'yes, length: ' + contextText.length : 'no');
+        
+        // Show loading state in the card
+        if (this.floatingCard) {
+            // TODO: Add loading state to the card
+        }
+        
+        // Extract page content
+        const pageContent = this.extractPageContent();
+        console.log('[ArticleAssistant] Extracted page content (first 200 chars):', 
+            pageContent ? pageContent.substring(0, 200) + '...' : 'No content extracted');
+        
+        // Prepare the prompt with context if available
+        let prompt = question;
+        if (contextText) {
+            prompt = `Question: ${question}\n\nContext from selected text: ${contextText}\n\nPlease answer the question specifically in relation to this selected text.`;
+            console.log('[ArticleAssistant] Using context for question. Full prompt:', prompt);
+        } else {
+            console.log('[ArticleAssistant] No context text provided, using standard prompt');
+        }
+        
+        // Call the API to get the answer
+        this.callAPI(prompt, pageContent)
+            .then(response => {
+                console.log('[ArticleAssistant] API response:', response);
+                
+                // Add the Q&A to the card
+                if (this.floatingCard) {
+                    this.floatingCard.addCustomQA(question, response);
+                }
+            })
+            .catch(error => {
+                console.error('[ArticleAssistant] Error processing question:', error);
+                
+                // Show error in the card
+                if (this.floatingCard) {
+                    this.floatingCard.addCustomQA(question, 'Sorry, there was an error processing your question. Please try again.');
+                }
+            });
+    }
+
+    callAPI(prompt, pageContent) {
+        return new Promise((resolve, reject) => {
+            console.log('[ArticleAssistant] Calling API with prompt:', prompt.substring(0, 100) + '...');
+            
+            if (!pageContent) {
+                console.log('[ArticleAssistant] No page content provided, extracting now...');
+                pageContent = this.extractPageContent();
+            }
+            
+            console.log('[ArticleAssistant] Page content length for API call:', pageContent ? pageContent.length : 0);
+            
+            if (!pageContent) {
+                reject(new Error('Failed to extract page content'));
+                return;
+            }
+            
+            console.log('[ArticleAssistant] Sending message to background: PROCESS_QUESTION');
+            chrome.runtime.sendMessage({
+                action: 'PROCESS_QUESTION',
+                question: prompt,
+                articleContent: pageContent
+            }, (response) => {
+                console.log('[ArticleAssistant] Received response from background:', response);
+                
+                if (!response) {
+                    reject(new Error('No response from background script'));
+                    return;
+                }
+                
+                if (response.error) {
+                    reject(new Error(response.error));
+                    return;
+                }
+                
+                resolve(response.answer);
+            });
+        });
+    }
+
     clearHighlights() {
         this.highlights.clearHighlights();
         if (this.floatingCard) {
-            this.floatingCard.remove();
+            // Don't call the overridden remove method to avoid setting cardWasClosed
+            // Instead, call the original FloatingCard.prototype.remove method
+            if (typeof this.floatingCard._originalRemove === 'function') {
+                this.floatingCard._originalRemove();
+            } else {
+                this.floatingCard.remove();
+            }
             this.floatingCard = null;
         }
+        // Reset the closed state since we're explicitly clearing everything
+        this.cardWasClosed = false;
     }
 
     // New method to attempt alternative ways of highlighting when the main method fails

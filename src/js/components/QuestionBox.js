@@ -1,11 +1,21 @@
 class QuestionBox {
-    constructor(floatingCard, onSubmit) {
+    constructor(floatingCard, onSubmit, selectedText = null) {
         this.floatingCard = floatingCard;
         this.onSubmit = onSubmit;
         this.box = null;
         
+        // Check for globally stored selected text if none was passed
+        if (!selectedText && window.articleAssistantSelectedText) {
+            selectedText = window.articleAssistantSelectedText;
+            console.log('[ArticleAssistant] QuestionBox using globally stored selected text:', 
+                selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''));
+        }
+        
+        this.selectedText = selectedText;
+        
         // Ensure onSubmit is properly bound
         console.log('[ArticleAssistant] QuestionBox constructor - onSubmit type:', typeof this.onSubmit);
+        console.log('[ArticleAssistant] QuestionBox constructor - selectedText present:', !!this.selectedText);
     }
 
     create() {
@@ -63,6 +73,12 @@ class QuestionBox {
         contentWrapper.style.cssText = `
             padding: 16px 20px 20px !important;
         `;
+
+        // Add selected text context if available
+        if (this.selectedText) {
+            const contextIndicator = this.createContextIndicator();
+            contentWrapper.appendChild(contextIndicator);
+        }
 
         // Create textarea
         const textarea = this.createTextarea();
@@ -250,6 +266,32 @@ class QuestionBox {
         return textareaWrapper;
     }
 
+    createContextIndicator() {
+        const contextIndicator = document.createElement('div');
+        contextIndicator.className = 'article-assistant-context-indicator';
+        
+        const label = document.createElement('div');
+        label.className = 'article-assistant-context-indicator-label';
+        label.textContent = 'Using selected text as context:';
+        
+        const text = document.createElement('div');
+        text.className = 'article-assistant-context-indicator-text';
+        
+        // Truncate text if it's too long
+        const maxLength = 150;
+        let displayText = this.selectedText;
+        if (displayText.length > maxLength) {
+            displayText = displayText.substring(0, maxLength) + '...';
+        }
+        
+        text.textContent = displayText;
+        
+        contextIndicator.appendChild(label);
+        contextIndicator.appendChild(text);
+        
+        return contextIndicator;
+    }
+
     createSubmitButton(textarea) {
         const self = this; // Store reference to this
         
@@ -328,8 +370,15 @@ class QuestionBox {
             submitBtn._processing = true;
             
             try {
+                // Get the selected text from either the instance or the global variable
+                const contextText = self.selectedText || window.articleAssistantSelectedText;
+                
                 console.log('[ArticleAssistant] Calling onSubmit function with question:', question);
-                const result = self.onSubmit(question);
+                // Log the selected text being passed
+                console.log('[ArticleAssistant] Passing selected text to onSubmit:', contextText ? 'yes, length: ' + contextText.length : 'no');
+                
+                // Pass both question and selected text to onSubmit
+                const result = self.onSubmit(question, contextText);
                 console.log('[ArticleAssistant] onSubmit result:', result);
             } catch (error) {
                 console.error('[ArticleAssistant] Error in onSubmit:', error);
@@ -394,7 +443,7 @@ class QuestionBox {
             
             try {
                 console.log('[ArticleAssistant] Backup handler - Calling onSubmit function with question:', question);
-                const result = self.onSubmit(question);
+                const result = self.onSubmit(question, self.selectedText);
                 console.log('[ArticleAssistant] Backup handler - onSubmit result:', result);
             } catch (error) {
                 console.error('[ArticleAssistant] Backup handler - Error in onSubmit:', error);
@@ -446,6 +495,21 @@ class QuestionBox {
             this.box.parentNode.removeChild(this.box);
         }
         this.box = null;
+    }
+
+    show() {
+        console.log('[ArticleAssistant] Showing question box');
+        if (!this.box) {
+            console.log('[ArticleAssistant] Creating question box first');
+            this.create();
+        } else {
+            console.log('[ArticleAssistant] Question box already exists');
+        }
+    }
+
+    getQuestionInput() {
+        if (!this.box) return null;
+        return this.box.querySelector('textarea');
     }
 }
 

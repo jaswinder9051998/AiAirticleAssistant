@@ -6,6 +6,8 @@ class FloatingCard {
         this.currentHandle = null;
         this.resizeStart = { x: 0, y: 0, width: 0, height: 0, top: 0 };
         this.savedSize = null;
+        this.selectionTooltip = null;
+        this.selectedText = null;
     }
 
     create(summary, points, onAskButtonClick) {
@@ -35,6 +37,9 @@ class FloatingCard {
 
         // Add to page
         document.body.appendChild(this.card);
+        
+        // Setup text selection handler
+        this.setupTextSelectionHandler(onAskButtonClick);
     }
 
     addResizeHandles() {
@@ -185,7 +190,7 @@ class FloatingCard {
         askButton.className = 'article-assistant-reveal-question-button';
         askButton.textContent = '✨ Ask a Question About This Article';
         
-        askButton.onclick = onAskButtonClick;
+        askButton.onclick = () => onAskButtonClick();
         askSection.appendChild(askButton);
 
         return askSection;
@@ -338,6 +343,9 @@ class FloatingCard {
             this.card.parentNode.removeChild(this.card);
         }
         this.card = null;
+        
+        // Also remove selection tooltip
+        this.removeSelectionTooltip();
     }
 
     scrollToHighlight(index) {
@@ -489,6 +497,89 @@ class FloatingCard {
         customQAContainer.appendChild(qaDiv);
 
         qaDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    setupTextSelectionHandler(onAskButtonClick) {
+        // Remove any existing selection tooltip
+        this.removeSelectionTooltip();
+        
+        // Add event listener for text selection
+        document.addEventListener('mouseup', (e) => {
+            // Don't show tooltip if selection is inside our card
+            if (this.card && this.card.contains(e.target)) {
+                return;
+            }
+            
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            // Remove existing tooltip if selection is empty
+            if (!selectedText) {
+                this.removeSelectionTooltip();
+                this.selectedText = null;
+                return;
+            }
+            
+            // Store selected text
+            this.selectedText = selectedText;
+            
+            // Create tooltip if it doesn't exist
+            if (!this.selectionTooltip) {
+                this.createSelectionTooltip(onAskButtonClick);
+            }
+            
+            // Position the tooltip above the selection
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            
+            this.selectionTooltip.style.left = `${rect.left + rect.width / 2 - this.selectionTooltip.offsetWidth / 2}px`;
+            this.selectionTooltip.style.top = `${rect.top - this.selectionTooltip.offsetHeight - 10 + window.scrollY}px`;
+            this.selectionTooltip.style.display = 'flex';
+        });
+        
+        // Hide tooltip when clicking elsewhere
+        document.addEventListener('mousedown', (e) => {
+            if (this.selectionTooltip && !this.selectionTooltip.contains(e.target)) {
+                this.selectionTooltip.style.display = 'none';
+            }
+        });
+    }
+
+    createSelectionTooltip(onAskButtonClick) {
+        this.selectionTooltip = document.createElement('div');
+        this.selectionTooltip.className = 'article-assistant-selection-tooltip';
+        
+        const chatButton = document.createElement('button');
+        chatButton.className = 'article-assistant-selection-chat-button';
+        chatButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+        chatButton.title = 'Ask about this selection';
+        
+        chatButton.addEventListener('click', () => {
+            // Store the selected text in a more persistent way
+            const capturedText = this.selectedText;
+            console.log('[ArticleAssistant] Captured selected text for question context:', capturedText ? capturedText.substring(0, 50) + '...' : 'none');
+            
+            // Store the selected text in a global variable for persistence
+            window.articleAssistantSelectedText = capturedText;
+            
+            // Hide the tooltip
+            this.selectionTooltip.style.display = 'none';
+            
+            // Call the onAskButtonClick with the captured text as context
+            if (capturedText) {
+                onAskButtonClick(capturedText);
+            }
+        });
+        
+        this.selectionTooltip.appendChild(chatButton);
+        document.body.appendChild(this.selectionTooltip);
+    }
+
+    removeSelectionTooltip() {
+        if (this.selectionTooltip && this.selectionTooltip.parentNode) {
+            this.selectionTooltip.parentNode.removeChild(this.selectionTooltip);
+            this.selectionTooltip = null;
+        }
     }
 }
 

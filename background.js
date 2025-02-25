@@ -423,6 +423,10 @@ async function processQuestion(question, articleContent) {
     console.log('[ArticleAssistant] - Question length:', question?.length || 0);
     console.log('[ArticleAssistant] - Article content length:', articleContent?.length || 0);
     
+    // Check if the question contains context from selected text
+    const hasSelectedContext = question.includes('Context from selected text:');
+    console.log('[ArticleAssistant] - Has selected text context:', hasSelectedContext);
+    
     if (!apiKey) {
         console.error('[ArticleAssistant] API key is not set - cannot process question');
         throw new Error('OpenRouter API key not set. Please set your API key in the extension settings.');
@@ -435,25 +439,55 @@ async function processQuestion(question, articleContent) {
 
     try {
         console.log('[ArticleAssistant] Preparing prompt for question');
-        const prompt = `You are a knowledgeable AI assistant helping to answer questions. Your goal is to provide accurate, balanced answers that combine your general knowledge with any relevant information from the provided article.
+        
+        // Use a different prompt structure if we have selected text context
+        let prompt;
+        
+        if (hasSelectedContext) {
+            // The question already contains the context, so we'll use it directly
+            prompt = `You are a knowledgeable AI assistant helping to answer questions about articles. Your goal is to provide balanced, informative answers that address the question using both your broader knowledge and the selected text context when relevant.
 
-        This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
+            This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
 
-        Question: "${question}"
+            ${question}
 
-        Article content for reference:
-        ${articleContent}
+            Article content for additional reference:
+            ${articleContent}
 
-        Guidelines for your response:
-        1. Prioritize your general knowledge and expertise first
-        2. Reference the article only when it contains relevant, specific information that adds value
-        3. Focus on answering the actual question being asked
-        4. You don't need to explicitly state what comes from where - just provide a natural, informative answer
+            Guidelines for your response:
+            1. First, provide a comprehensive answer using your general knowledge about the topic
+            2. After providing general information, you may reference the selected text with a phrase like "In the context of the selected text..." if it adds specific relevant details
+            3. Incorporate relevant information from the broader article when helpful
+            4. Structure your response to start broad and then narrow to specifics from the selected text
+            5. Don't feel constrained to only reference the article or selected text - prioritize a helpful, informative answer
 
-        IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.
+            IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.`;
+            
+            console.log('[ArticleAssistant] Using knowledge-first, context-aware prompt structure');
+        } else {
+            // Standard prompt for general questions about the article
+            prompt = `You are a knowledgeable AI assistant helping to answer questions. Your goal is to provide accurate, balanced answers that combine your general knowledge with relevant information from the provided article.
 
-        Remember: You are a general AI assistant who happens to have access to this article, not an article-specific assistant.`;
+            This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
 
+            Question: "${question}"
+
+            Article content for reference:
+            ${articleContent}
+
+            Guidelines for your response:
+            1. Balance your general knowledge with information from the article
+            2. Provide a comprehensive answer that addresses the question directly
+            3. Include relevant information from the article when it adds value
+            4. Don't feel constrained to only reference the article - use your broader knowledge
+            5. Aim for a natural, informative response that doesn't explicitly state your sources
+
+            IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.`;
+            
+            console.log('[ArticleAssistant] Using balanced standard prompt structure');
+        }
+
+        console.log('[ArticleAssistant] Prompt first 200 chars:', prompt.substring(0, 200) + '...');
         console.log('[ArticleAssistant] Calling LLM with question prompt');
         try {
             const response = await callLLM(prompt);
