@@ -4,7 +4,7 @@ class FloatingCard {
         this.isMinimized = false;
         this.isResizing = false;
         this.currentHandle = null;
-        this.resizeStart = { x: 0, y: 0, width: 0, height: 0 };
+        this.resizeStart = { x: 0, y: 0, width: 0, height: 0, top: 0 };
         this.savedSize = null;
     }
 
@@ -39,13 +39,19 @@ class FloatingCard {
 
     addResizeHandles() {
         const leftHandle = document.createElement('div');
-        leftHandle.className = 'article-assistant-resize-handle left';
+        leftHandle.className = 'article-assistant-resize-handle-left';
 
         const rightHandle = document.createElement('div');
-        rightHandle.className = 'article-assistant-resize-handle right';
+        rightHandle.className = 'article-assistant-resize-handle-right';
+
+        const topHandle = document.createElement('div');
+        topHandle.className = 'article-assistant-resize-handle-top';
+        
+        const bottomHandle = document.createElement('div');
+        bottomHandle.className = 'article-assistant-resize-handle-bottom';
 
         // Add resize event listeners
-        [leftHandle, rightHandle].forEach(handle => {
+        [leftHandle, rightHandle, topHandle, bottomHandle].forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -53,8 +59,11 @@ class FloatingCard {
                 this.currentHandle = handle;
                 this.resizeStart = {
                     x: e.clientX,
+                    y: e.clientY,
                     width: this.card.offsetWidth,
-                    left: this.card.offsetLeft
+                    height: this.card.offsetHeight,
+                    left: this.card.offsetLeft,
+                    top: this.card.offsetTop
                 };
             });
         });
@@ -65,6 +74,8 @@ class FloatingCard {
 
         this.card.appendChild(leftHandle);
         this.card.appendChild(rightHandle);
+        this.card.appendChild(topHandle);
+        this.card.appendChild(bottomHandle);
     }
 
     handleMouseMove(e) {
@@ -72,19 +83,39 @@ class FloatingCard {
         
         e.preventDefault();
         const deltaX = e.clientX - this.resizeStart.x;
-        const isLeft = this.currentHandle.classList.contains('left');
+        const deltaY = e.clientY - this.resizeStart.y;
+        
+        const isLeft = this.currentHandle.classList.contains('article-assistant-resize-handle-left');
+        const isRight = this.currentHandle.classList.contains('article-assistant-resize-handle-right');
+        const isTop = this.currentHandle.classList.contains('article-assistant-resize-handle-top');
+        const isBottom = this.currentHandle.classList.contains('article-assistant-resize-handle-bottom');
 
+        // Handle horizontal resizing
         if (isLeft) {
-            const newWidth = Math.max(0, this.resizeStart.width - deltaX);
+            const newWidth = Math.max(250, this.resizeStart.width - deltaX);
             const newLeft = this.resizeStart.left + deltaX;
             this.card.style.width = `${newWidth}px`;
             this.card.style.left = `${newLeft}px`;
             this.card.style.right = 'auto';
-        } else {
-            const newWidth = Math.max(0, this.resizeStart.width + deltaX);
+        } else if (isRight) {
+            const newWidth = Math.max(250, this.resizeStart.width + deltaX);
             this.card.style.width = `${newWidth}px`;
             this.card.style.left = `${this.resizeStart.left}px`;
             this.card.style.right = 'auto';
+        }
+
+        // Handle vertical resizing
+        if (isTop) {
+            const newHeight = Math.max(200, this.resizeStart.height - deltaY);
+            const newTop = this.resizeStart.top + deltaY;
+            this.card.style.height = `${newHeight}px`;
+            this.card.style.top = `${newTop}px`;
+            this.card.style.bottom = 'auto';
+        } else if (isBottom) {
+            const newHeight = Math.max(200, this.resizeStart.height + deltaY);
+            this.card.style.height = `${newHeight}px`;
+            this.card.style.top = `${this.resizeStart.top}px`;
+            this.card.style.bottom = 'auto';
         }
     }
 

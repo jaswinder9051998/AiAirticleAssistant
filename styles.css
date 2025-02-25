@@ -182,6 +182,17 @@
     z-index: 1;
 }
 
+/* Top resize handle */
+.article-assistant-resize-handle-top {
+    position: absolute;
+    top: -5px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    cursor: ns-resize;
+    z-index: 1;
+}
+
 /* Bottom resize handle */
 .article-assistant-resize-handle-bottom {
     position: absolute;
@@ -196,6 +207,7 @@
 /* Hover effect for resize handles */
 .article-assistant-resize-handle-left:hover,
 .article-assistant-resize-handle-right:hover,
+.article-assistant-resize-handle-top:hover,
 .article-assistant-resize-handle-bottom:hover {
     background-color: rgba(76, 175, 80, 0.1);
 }

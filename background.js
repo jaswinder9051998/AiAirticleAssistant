@@ -447,9 +447,8 @@ async function processQuestion(question, articleContent) {
         Guidelines for your response:
         1. Prioritize your general knowledge and expertise first
         2. Reference the article only when it contains relevant, specific information that adds value
-        3. Keep your answer concise but thorough - focus on quality over length
-        4. Focus on answering the actual question being asked
-        5. You don't need to explicitly state what comes from where - just provide a natural, informative answer
+        3. Focus on answering the actual question being asked
+        4. You don't need to explicitly state what comes from where - just provide a natural, informative answer
 
         IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.
 
