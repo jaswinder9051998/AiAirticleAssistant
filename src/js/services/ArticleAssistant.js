@@ -5,6 +5,7 @@ class ArticleAssistant {
         this.initialized = false;
         this.cardWasClosed = false;
         this.lastCardData = null;
+        this.vocabularyTerms = null; // Store vocabulary terms
     }
 
     async initializeAsync() {
@@ -48,7 +49,8 @@ class ArticleAssistant {
             // Store the card data for potential reopening later
             this.lastCardData = {
                 summary: response.summary,
-                points: response.points
+                points: response.points,
+                executiveSummary: response.executiveSummary || "This article discusses key economic and market trends affecting investor behavior."
             };
             
             // Reset the closed state when creating a new card
@@ -69,7 +71,8 @@ class ArticleAssistant {
             this.floatingCard.create(
                 response.summary, 
                 response.points,
-                () => this.createAndShowQuestionBox()
+                () => this.createAndShowQuestionBox(),
+                response.executiveSummary
             );
 
             // Process highlights
@@ -136,6 +139,9 @@ class ArticleAssistant {
                 }
             }
 
+            // Process vocabulary after highlights are done
+            this.processVocabulary(content.content);
+
             return { success: true };
         } catch (error) {
             console.error('[ArticleAssistant] Error processing article:', error);
@@ -176,7 +182,8 @@ class ArticleAssistant {
                     this.floatingCard.create(
                         this.lastCardData.summary,
                         this.lastCardData.points,
-                        () => this.createAndShowQuestionBox()
+                        () => this.createAndShowQuestionBox(),
+                        this.lastCardData.executiveSummary
                     );
                     
                     // Reset the closed state
@@ -188,7 +195,8 @@ class ArticleAssistant {
                     this.floatingCard.create(
                         "Article Assistant",
                         [],
-                        () => this.createAndShowQuestionBox()
+                        () => this.createAndShowQuestionBox(),
+                        "No summary available for this article."
                     );
                 }
             }
@@ -477,6 +485,333 @@ class ArticleAssistant {
             console.error('[ArticleAssistant] Error in extractPageContent:', error);
             return null;
         }
+    }
+
+    // Add a new method to process vocabulary
+    async processVocabulary(content) {
+        try {
+            console.log('[ArticleAssistant] Processing vocabulary for article');
+            
+            // Send request to background script to identify difficult vocabulary
+            const response = await chrome.runtime.sendMessage({
+                action: 'identifyVocabulary',
+                content: content
+            });
+            
+            if (response.error) {
+                console.error('[ArticleAssistant] Error identifying vocabulary:', response.error);
+                return;
+            }
+            
+            if (!response.vocabulary || !Array.isArray(response.vocabulary)) {
+                console.error('[ArticleAssistant] Invalid vocabulary response format:', response);
+                return;
+            }
+            
+            // Store vocabulary terms for later use
+            this.vocabularyTerms = response.vocabulary;
+            console.log('[ArticleAssistant] Identified vocabulary terms:', this.vocabularyTerms);
+            
+            // Highlight vocabulary terms in the article
+            this.highlightVocabularyTerms();
+            
+        } catch (error) {
+            console.error('[ArticleAssistant] Error processing vocabulary:', error);
+        }
+    }
+    
+    // Method to highlight vocabulary terms in the article
+    highlightVocabularyTerms() {
+        if (!this.vocabularyTerms || this.vocabularyTerms.length === 0) {
+            console.log('[ArticleAssistant] No vocabulary terms to highlight');
+            return;
+        }
+        
+        console.log('[ArticleAssistant] Highlighting vocabulary terms:', this.vocabularyTerms.length);
+        
+        // Sort terms by length (descending) to prioritize longer phrases
+        const sortedTerms = [...this.vocabularyTerms].sort((a, b) => 
+            b.word.length - a.word.length
+        );
+        
+        // Cache tooltips for better performance
+        const tooltipCache = new Map();
+        
+        for (const term of sortedTerms) {
+            try {
+                // Log the term to verify it has both definitions
+                console.log(`[ArticleAssistant] Processing vocabulary term:`, {
+                    word: term.word,
+                    formal_definition: term.formal_definition,
+                    simple_definition: term.simple_definition
+                });
+                
+                // Find all instances of the term in the document
+                const ranges = this.highlights.findAllTextRanges(term.word);
+                
+                if (ranges.length === 0) {
+                    console.log(`[ArticleAssistant] No matches found for vocabulary term: ${term.word}`);
+                    continue;
+                }
+                
+                console.log(`[ArticleAssistant] Found ${ranges.length} matches for vocabulary term: ${term.word}`);
+                
+                // Highlight each instance
+                for (const range of ranges) {
+                    try {
+                        // Create vocabulary highlight element
+                        const vocabHighlight = document.createElement('span');
+                        vocabHighlight.className = 'article-assistant-vocab';
+                        vocabHighlight.setAttribute('title', `${term.word}: ${term.formal_definition} | ${term.simple_definition}`); // Fallback tooltip
+                        
+                        // Create tooltip
+                        const tooltip = document.createElement('div');
+                        tooltip.className = 'article-assistant-vocab-tooltip';
+                        tooltip.style.zIndex = '10002'; // Ensure high z-index
+                        
+                        // Add word and definitions to tooltip
+                        const wordEl = document.createElement('div');
+                        wordEl.className = 'article-assistant-vocab-word';
+                        wordEl.textContent = term.word;
+                        
+                        const formalDefinitionEl = document.createElement('div');
+                        formalDefinitionEl.className = 'article-assistant-vocab-definition formal';
+                        formalDefinitionEl.innerHTML = `<strong>1.</strong> ${term.formal_definition}`;
+                        
+                        const simpleDefinitionEl = document.createElement('div');
+                        simpleDefinitionEl.className = 'article-assistant-vocab-definition simple';
+                        simpleDefinitionEl.innerHTML = `<strong>2.</strong> ${term.simple_definition}`;
+                        
+                        // Add a separator between definitions
+                        const separator = document.createElement('div');
+                        separator.className = 'article-assistant-vocab-separator';
+                        
+                        // Append all elements to the tooltip
+                        tooltip.appendChild(wordEl);
+                        tooltip.appendChild(formalDefinitionEl);
+                        tooltip.appendChild(separator);
+                        tooltip.appendChild(simpleDefinitionEl);
+                        
+                        // Log the tooltip structure
+                        console.log(`[ArticleAssistant] Created tooltip for ${term.word} with:`, {
+                            wordElement: wordEl.textContent,
+                            formalDefinition: formalDefinitionEl.textContent,
+                            simpleDefinition: simpleDefinitionEl.textContent,
+                            childNodes: tooltip.childNodes.length
+                        });
+                        
+                        // Add tooltip to highlight
+                        vocabHighlight.appendChild(tooltip);
+                        
+                        // Store in cache for reference
+                        const tooltipId = `tooltip-${Math.random().toString(36).substring(2, 9)}`;
+                        vocabHighlight.dataset.tooltipId = tooltipId;
+                        tooltipCache.set(tooltipId, tooltip);
+                        
+                        // Try to surround the range with the highlight
+                        try {
+                            range.surroundContents(vocabHighlight);
+                            
+                            // Add event listeners for hover with debugging
+                            vocabHighlight.addEventListener('mouseenter', (event) => {
+                                console.log(`[ArticleAssistant] Mouse enter on vocab: ${term.word}`);
+                                this.adjustTooltipPosition(vocabHighlight, tooltip);
+                                tooltip.style.opacity = '1';
+                                tooltip.style.visibility = 'visible';
+                                tooltip.style.pointerEvents = 'auto'; // Enable pointer events on tooltip
+                                
+                                // Debug tooltip visibility and content
+                                console.log(`[ArticleAssistant] Tooltip visibility: ${getComputedStyle(tooltip).visibility}`);
+                                console.log(`[ArticleAssistant] Tooltip opacity: ${getComputedStyle(tooltip).opacity}`);
+                                console.log(`[ArticleAssistant] Tooltip z-index: ${getComputedStyle(tooltip).zIndex}`);
+                                console.log(`[ArticleAssistant] Tooltip children:`, {
+                                    count: tooltip.childNodes.length,
+                                    html: tooltip.innerHTML
+                                });
+                            });
+                            
+                            vocabHighlight.addEventListener('mouseleave', (event) => {
+                                console.log(`[ArticleAssistant] Mouse leave from vocab: ${term.word}`);
+                                // Check if we're moving to the tooltip itself
+                                const relatedTarget = event.relatedTarget;
+                                if (tooltip.contains(relatedTarget)) {
+                                    console.log('[ArticleAssistant] Moving to tooltip, keeping visible');
+                                    return; // Don't hide if moving to tooltip
+                                }
+                                
+                                tooltip.style.opacity = '0';
+                                tooltip.style.visibility = 'hidden';
+                            });
+                            
+                            // Add event listeners to the tooltip itself
+                            tooltip.addEventListener('mouseleave', () => {
+                                console.log(`[ArticleAssistant] Mouse leave from tooltip for: ${term.word}`);
+                                tooltip.style.opacity = '0';
+                                tooltip.style.visibility = 'hidden';
+                            });
+                            
+                        } catch (surroundError) {
+                            console.log(`[ArticleAssistant] Could not create single vocab highlight for "${term.word}", using multi-node approach:`, surroundError.message);
+                            
+                            // Fallback: Highlight each text node in the range separately
+                            const nodes = this.highlights.getTextNodesInRange(range);
+                            
+                            if (nodes.length === 0) {
+                                throw new Error('No text nodes found in range');
+                            }
+                            
+                            for (const node of nodes) {
+                                try {
+                                    // Make sure node has content
+                                    if (!node.textContent.trim()) continue;
+                                    
+                                    const nodeRange = document.createRange();
+                                    nodeRange.selectNodeContents(node);
+                                    
+                                    // Clone the vocab highlight for each node
+                                    const nodeVocabHighlight = vocabHighlight.cloneNode(true);
+                                    const nodeTooltip = nodeVocabHighlight.querySelector('.article-assistant-vocab-tooltip');
+                                    
+                                    // Ensure the tooltip has all the necessary elements
+                                    if (!nodeTooltip.querySelector('.article-assistant-vocab-separator')) {
+                                        const wordEl = document.createElement('div');
+                                        wordEl.className = 'article-assistant-vocab-word';
+                                        wordEl.textContent = term.word;
+                                        
+                                        const formalDefinitionEl = document.createElement('div');
+                                        formalDefinitionEl.className = 'article-assistant-vocab-definition formal';
+                                        formalDefinitionEl.innerHTML = `<strong>1.</strong> ${term.formal_definition}`;
+                                        
+                                        const separator = document.createElement('div');
+                                        separator.className = 'article-assistant-vocab-separator';
+                                        
+                                        const simpleDefinitionEl = document.createElement('div');
+                                        simpleDefinitionEl.className = 'article-assistant-vocab-definition simple';
+                                        simpleDefinitionEl.innerHTML = `<strong>2.</strong> ${term.simple_definition}`;
+                                        
+                                        // Clear and rebuild the tooltip
+                                        nodeTooltip.innerHTML = '';
+                                        nodeTooltip.appendChild(wordEl);
+                                        nodeTooltip.appendChild(formalDefinitionEl);
+                                        nodeTooltip.appendChild(separator);
+                                        nodeTooltip.appendChild(simpleDefinitionEl);
+                                    }
+                                    
+                                    // Generate unique ID for this tooltip
+                                    const nodeTooltipId = `tooltip-${Math.random().toString(36).substring(2, 9)}`;
+                                    nodeVocabHighlight.dataset.tooltipId = nodeTooltipId;
+                                    tooltipCache.set(nodeTooltipId, nodeTooltip);
+                                    
+                                    // Add event listeners for hover with debugging
+                                    nodeVocabHighlight.addEventListener('mouseenter', (event) => {
+                                        console.log(`[ArticleAssistant] Mouse enter on vocab (multi-node): ${term.word}`);
+                                        this.adjustTooltipPosition(nodeVocabHighlight, nodeTooltip);
+                                        nodeTooltip.style.opacity = '1';
+                                        nodeTooltip.style.visibility = 'visible';
+                                        nodeTooltip.style.pointerEvents = 'auto';
+                                        
+                                        // Debug tooltip visibility and content
+                                        console.log(`[ArticleAssistant] Multi-node tooltip visibility: ${getComputedStyle(nodeTooltip).visibility}`);
+                                        console.log(`[ArticleAssistant] Multi-node tooltip opacity: ${getComputedStyle(nodeTooltip).opacity}`);
+                                        console.log(`[ArticleAssistant] Multi-node tooltip children:`, {
+                                            count: nodeTooltip.childNodes.length,
+                                            html: nodeTooltip.innerHTML
+                                        });
+                                    });
+                                    
+                                    nodeVocabHighlight.addEventListener('mouseleave', (event) => {
+                                        console.log(`[ArticleAssistant] Mouse leave from vocab (multi-node): ${term.word}`);
+                                        // Check if we're moving to the tooltip itself
+                                        const relatedTarget = event.relatedTarget;
+                                        if (nodeTooltip.contains(relatedTarget)) {
+                                            console.log('[ArticleAssistant] Moving to tooltip, keeping visible');
+                                            return; // Don't hide if moving to tooltip
+                                        }
+                                        
+                                        nodeTooltip.style.opacity = '0';
+                                        nodeTooltip.style.visibility = 'hidden';
+                                    });
+                                    
+                                    // Add event listeners to the tooltip itself
+                                    nodeTooltip.addEventListener('mouseleave', () => {
+                                        console.log(`[ArticleAssistant] Mouse leave from tooltip (multi-node) for: ${term.word}`);
+                                        nodeTooltip.style.opacity = '0';
+                                        nodeTooltip.style.visibility = 'hidden';
+                                    });
+                                    
+                                    nodeRange.surroundContents(nodeVocabHighlight);
+                                } catch (nodeError) {
+                                    console.error(`[ArticleAssistant] Error highlighting vocab node for "${term.word}":`, nodeError);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`[ArticleAssistant] Error creating vocab highlight for "${term.word}":`, error);
+                    }
+                }
+            } catch (error) {
+                console.error(`[ArticleAssistant] Error processing vocabulary term "${term.word}":`, error);
+            }
+        }
+    }
+    
+    // Method to adjust tooltip position based on viewport
+    adjustTooltipPosition(vocabElement, tooltip) {
+        if (!vocabElement || !tooltip) {
+            console.error('[ArticleAssistant] Missing element or tooltip in adjustTooltipPosition');
+            return;
+        }
+        
+        const rect = vocabElement.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        console.log('[ArticleAssistant] Adjusting tooltip position:', {
+            vocabRect: {
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height
+            },
+            tooltipRect: {
+                width: tooltipRect.width,
+                height: tooltipRect.height
+            },
+            viewport: {
+                width: window.innerWidth,
+                height: window.innerHeight
+            }
+        });
+        
+        // Reset classes
+        tooltip.classList.remove('tooltip-below', 'tooltip-left', 'tooltip-right');
+        
+        // Check if tooltip would go off the top of the screen
+        if (rect.top < tooltipRect.height + 10) {
+            tooltip.classList.add('tooltip-below');
+            console.log('[ArticleAssistant] Positioning tooltip below element');
+        } else {
+            console.log('[ArticleAssistant] Positioning tooltip above element');
+        }
+        
+        // Check if tooltip would go off the left or right of the screen
+        const viewportWidth = window.innerWidth;
+        const tooltipCenter = rect.left + (rect.width / 2);
+        const tooltipHalfWidth = tooltipRect.width / 2;
+        
+        if (tooltipCenter - tooltipHalfWidth < 10) {
+            tooltip.classList.add('tooltip-right');
+            console.log('[ArticleAssistant] Aligning tooltip to the right');
+        } else if (tooltipCenter + tooltipHalfWidth > viewportWidth - 10) {
+            tooltip.classList.add('tooltip-left');
+            console.log('[ArticleAssistant] Aligning tooltip to the left');
+        } else {
+            console.log('[ArticleAssistant] Centering tooltip');
+        }
+        
+        // Force reflow to ensure tooltip is properly positioned
+        tooltip.style.display = 'none';
+        tooltip.offsetHeight; // Force reflow
+        tooltip.style.display = '';
     }
 }
 

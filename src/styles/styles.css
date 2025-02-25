@@ -1,0 +1,65 @@
+/* Executive Summary */
+.article-assistant-executive-summary {
+    margin: 0 24px 20px 24px;
+    padding: 22px;
+    background: white;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    position: relative;
+    overflow: hidden;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #333;
+    transition: box-shadow 0.15s ease;
+    max-width: 100%;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transform: translateZ(0);
+    will-change: box-shadow, border-color;
+}
+
+.article-assistant-executive-summary:hover {
+    box-shadow: 0 6px 12px rgba(35, 58, 159, 0.06);
+    border-color: rgba(66, 133, 244, 0.2);
+}
+
+.article-assistant-executive-summary::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(to bottom, #4285f4, #0d47a1);
+    border-radius: 2px 0 0 2px;
+    opacity: 0.8;
+}
+
+.article-assistant-executive-summary-title {
+    font-weight: 700;
+    color: #4285f4;
+    margin-bottom: 12px;
+    font-size: 17px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    position: relative;
+    text-rendering: optimizeLegibility;
+}
+
+.article-assistant-executive-summary-content {
+    color: #333;
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: normal;
+    font-weight: 400;
+    text-rendering: optimizeLegibility;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    hyphens: auto;
+    margin: 0;
+    padding: 0;
+}
+
+/* Q&A Section */ 

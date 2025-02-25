@@ -411,6 +411,204 @@ class Highlights {
             highlight.tooltip = null;
         }
     }
+
+    // Add a new method to find all instances of a text
+    findAllTextRanges(text) {
+        console.log('[ArticleAssistant] Starting findAllTextRanges with text:', text);
+        
+        if (!text || text.trim().length === 0) {
+            console.error('[ArticleAssistant] Empty text provided to findAllTextRanges');
+            return [];
+        }
+        
+        // Find the article container - try multiple selectors to improve chances of finding the content
+        const selectors = ['article', '[role="main"]', 'main', '.article', '.post', '.content', '.article-content', '#article-body', '.story-body'];
+        let articleElement = null;
+        
+        for (const selector of selectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+                articleElement = el;
+                console.log('[ArticleAssistant] Found article container using selector:', selector);
+                break;
+            }
+        }
+        
+        if (!articleElement) {
+            console.error('[ArticleAssistant] No article element found using any selector');
+            // Fallback to body as last resort
+            articleElement = document.body;
+        }
+
+        // Normalize search text for more reliable matching
+        const normalizeText = (str) => {
+            return str.toLowerCase()
+                     .replace(/[\u2018\u2019'']/g, "'")
+                     .replace(/[\u201C\u201D""]/g, '"')
+                     .replace(/\s+/g, ' ')
+                     .replace(/\n/g, ' ') // Replace newlines with spaces
+                     .replace(/\t/g, ' ') // Replace tabs with spaces
+                     .replace(/\r/g, '') // Remove carriage returns
+                     .trim();
+        };
+        
+        const normalizedSearchText = normalizeText(text);
+        console.log('[ArticleAssistant] Normalized search text:', normalizedSearchText);
+
+        // Get all text nodes in the article
+        const textNodes = [];
+        const walker = document.createTreeWalker(
+            articleElement,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    // Skip hidden elements and unwanted content
+                    const parent = node.parentElement;
+                    if (!parent || 
+                        parent.closest('script, style, noscript, .article-assistant-floating-card, .article-assistant-vocab, nav, header:not(article header), footer:not(article footer)') ||
+                        getComputedStyle(parent).display === 'none' ||
+                        getComputedStyle(parent).visibility === 'hidden') {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.SKIP;
+                }
+            }
+        );
+
+        let node;
+        while (node = walker.nextNode()) {
+            textNodes.push(node);
+        }
+
+        // Find all occurrences of the text
+        const ranges = [];
+        
+        for (let i = 0; i < textNodes.length; i++) {
+            const currentNode = textNodes[i];
+            const normalizedNodeText = normalizeText(currentNode.textContent);
+            
+            // Check if this node contains the search text
+            let startIndex = normalizedNodeText.indexOf(normalizedSearchText);
+            
+            // If found in this node
+            while (startIndex !== -1) {
+                try {
+                    // Create a range for this occurrence
+                    const range = document.createRange();
+                    range.setStart(currentNode, startIndex);
+                    range.setEnd(currentNode, startIndex + normalizedSearchText.length);
+                    
+                    // Add to our collection
+                    ranges.push(range);
+                    
+                    // Look for next occurrence in this node
+                    startIndex = normalizedNodeText.indexOf(normalizedSearchText, startIndex + 1);
+                } catch (error) {
+                    console.error('[ArticleAssistant] Error creating range in findAllTextRanges:', error);
+                    break;
+                }
+            }
+            
+            // Check for text that spans multiple nodes
+            if (normalizedSearchText.length > normalizedNodeText.length && i < textNodes.length - 1) {
+                // Try to find text that spans across nodes
+                let combinedText = normalizedNodeText;
+                let endNodeIndex = i;
+                let endOffset = 0;
+                
+                // Build up text across nodes until we have enough to match
+                for (let j = i + 1; j < textNodes.length && combinedText.length < normalizedSearchText.length + 20; j++) {
+                    const nextNodeText = normalizeText(textNodes[j].textContent);
+                    combinedText += ' ' + nextNodeText;
+                    
+                    // Check if combined text contains our search text
+                    startIndex = combinedText.indexOf(normalizedSearchText);
+                    if (startIndex !== -1) {
+                        // We found a match that spans nodes
+                        try {
+                            // Calculate which node contains the end of our text
+                            let remainingLength = normalizedSearchText.length;
+                            let currentStartIndex = startIndex;
+                            let startNodeIndex = i;
+                            let startOffset = 0;
+                            
+                            // Find start node and offset
+                            for (let k = i; k <= j; k++) {
+                                const nodeText = normalizeText(textNodes[k].textContent);
+                                if (k === i) {
+                                    // First node
+                                    if (currentStartIndex < nodeText.length) {
+                                        // Start is in this node
+                                        startNodeIndex = k;
+                                        startOffset = currentStartIndex;
+                                        remainingLength -= (nodeText.length - currentStartIndex);
+                                    } else {
+                                        // Start is in a later node
+                                        currentStartIndex -= nodeText.length + 1; // +1 for the space we added
+                                    }
+                                } else {
+                                    // Subsequent nodes
+                                    if (currentStartIndex <= nodeText.length) {
+                                        // Start is in this node
+                                        startNodeIndex = k;
+                                        startOffset = currentStartIndex;
+                                        remainingLength -= (nodeText.length - currentStartIndex);
+                                        break;
+                                    } else {
+                                        // Start is in a later node
+                                        currentStartIndex -= nodeText.length + 1; // +1 for the space we added
+                                    }
+                                }
+                            }
+                            
+                            // Find end node and offset
+                            for (let k = startNodeIndex; k <= j && remainingLength > 0; k++) {
+                                const nodeText = normalizeText(textNodes[k].textContent);
+                                if (k === startNodeIndex) {
+                                    // Starting node
+                                    if (remainingLength <= nodeText.length - startOffset) {
+                                        // End is in this node
+                                        endNodeIndex = k;
+                                        endOffset = startOffset + remainingLength;
+                                        remainingLength = 0;
+                                        break;
+                                    } else {
+                                        // End is in a later node
+                                        remainingLength -= (nodeText.length - startOffset);
+                                    }
+                                } else {
+                                    // Subsequent nodes
+                                    if (remainingLength <= nodeText.length) {
+                                        // End is in this node
+                                        endNodeIndex = k;
+                                        endOffset = remainingLength;
+                                        remainingLength = 0;
+                                        break;
+                                    } else {
+                                        // End is in a later node
+                                        remainingLength -= nodeText.length;
+                                    }
+                                }
+                            }
+                            
+                            // Create the range if we found valid start and end points
+                            if (remainingLength === 0) {
+                                const multiNodeRange = document.createRange();
+                                multiNodeRange.setStart(textNodes[startNodeIndex], startOffset);
+                                multiNodeRange.setEnd(textNodes[endNodeIndex], endOffset);
+                                ranges.push(multiNodeRange);
+                            }
+                        } catch (error) {
+                            console.error('[ArticleAssistant] Error creating multi-node range:', error);
+                        }
+                    }
+                }
+            }
+        }
+        
+        console.log(`[ArticleAssistant] Found ${ranges.length} occurrences of "${text}"`);
+        return ranges;
+    }
 }
 
 window.Highlights = Highlights; 

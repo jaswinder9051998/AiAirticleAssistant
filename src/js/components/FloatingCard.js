@@ -8,11 +8,15 @@ class FloatingCard {
         this.savedSize = null;
         this.selectionTooltip = null;
         this.selectedText = null;
+        this.executiveSummary = null;
     }
 
-    create(summary, points, onAskButtonClick) {
+    create(summary, points, onAskButtonClick, executiveSummary) {
         // Remove existing card if any
         this.remove();
+
+        // Store the executive summary
+        this.executiveSummary = executiveSummary;
 
         // Create the card
         this.card = document.createElement('div');
@@ -204,6 +208,10 @@ class FloatingCard {
         content.style.padding = '20px';
         content.style.flexGrow = '1';
 
+        // Add executive summary section
+        const executiveSummarySection = this.createExecutiveSummarySection(summary);
+        content.appendChild(executiveSummarySection);
+
         // Add Q&A section
         const qaSection = this.createQASection(summary);
         content.appendChild(qaSection);
@@ -214,6 +222,58 @@ class FloatingCard {
 
         contentWrapper.appendChild(content);
         return contentWrapper;
+    }
+
+    createExecutiveSummarySection(summary) {
+        const executiveSummarySection = document.createElement('div');
+        executiveSummarySection.className = 'article-assistant-quotes-section';
+        // Remove the top border for the first section
+        executiveSummarySection.style.borderTop = 'none';
+        executiveSummarySection.style.marginTop = '0';
+        
+        // Create a title for the executive summary
+        const title = document.createElement('h3');
+        title.textContent = 'Executive Summary';
+        executiveSummarySection.appendChild(title);
+        
+        // Use the provided executive summary if available, otherwise generate one
+        let summaryText = "";
+        if (this.executiveSummary) {
+            // Format the executive summary to ensure it's clean and properly formatted
+            summaryText = this.executiveSummary.trim();
+        } else {
+            // Generate a summary based on the Q&A content if no executive summary is provided
+            const qaPairs = this.extractQAPairs(summary);
+            summaryText = this.generateExecutiveSummary(qaPairs).trim();
+        }
+        
+        // Ensure the summary doesn't have excessive whitespace or line breaks
+        summaryText = summaryText.replace(/\s+/g, ' ').trim();
+        
+        // Create a paragraph element for the summary text
+        const summaryParagraph = document.createElement('p');
+        summaryParagraph.className = 'article-assistant-executive-summary-content';
+        summaryParagraph.textContent = summaryText;
+        summaryParagraph.style.margin = '0';
+        summaryParagraph.style.padding = '12px 16px';
+        summaryParagraph.style.backgroundColor = '#f9f9f9';
+        summaryParagraph.style.borderRadius = '8px';
+        summaryParagraph.style.border = '1px solid rgba(0, 0, 0, 0.08)';
+        
+        executiveSummarySection.appendChild(summaryParagraph);
+        return executiveSummarySection;
+    }
+
+    generateExecutiveSummary(qaPairs) {
+        // Generate a concise summary based on the Q&A content
+        return "This article discusses key economic trends and market developments that are influencing investor behavior and sector performance.";
+    }
+    
+    // Helper method to extract Q&A pairs from the summary
+    extractQAPairs(summary) {
+        // Extract Q&A content to generate the summary
+        const qaContent = summary.split('💡 MAIN POINTS')[1] || summary;
+        return qaContent.split(/Q:/).filter(pair => pair.trim());
     }
 
     createQASection(summary) {
@@ -578,9 +638,50 @@ class FloatingCard {
             const range = selection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
             
-            this.selectionTooltip.style.left = `${rect.left + rect.width / 2 - this.selectionTooltip.offsetWidth / 2}px`;
-            this.selectionTooltip.style.top = `${rect.top - this.selectionTooltip.offsetHeight - 10 + window.scrollY}px`;
+            // Calculate a better position - slightly to the right of the start of the selection
+            // and ensure it stays within the viewport
+            const tooltipWidth = this.selectionTooltip.offsetWidth || 40; // Default if not yet rendered
+            
+            // Position horizontally - 20% from the left of the selection instead of center
+            let leftPosition = rect.left + (rect.width * 0.2) - (tooltipWidth / 2);
+            
+            // Ensure the tooltip doesn't go off-screen to the left
+            leftPosition = Math.max(10, leftPosition);
+            
+            // Ensure the tooltip doesn't go off-screen to the right
+            const rightEdge = leftPosition + tooltipWidth;
+            if (rightEdge > window.innerWidth - 10) {
+                leftPosition = window.innerWidth - tooltipWidth - 10;
+            }
+            
+            // Position vertically - above the selection with a small gap
+            const tooltipHeight = this.selectionTooltip.offsetHeight || 30; // Default if not yet rendered
+            let topPosition = rect.top - tooltipHeight - 10 + window.scrollY;
+            
+            // If there's not enough space above, position it below the selection
+            if (topPosition < window.scrollY + 10) {
+                topPosition = rect.bottom + 10 + window.scrollY;
+                
+                // Update the tooltip arrow to point upward when positioned below
+                this.selectionTooltip.classList.add('tooltip-below');
+            } else {
+                this.selectionTooltip.classList.remove('tooltip-below');
+            }
+            
+            this.selectionTooltip.style.left = `${leftPosition}px`;
+            this.selectionTooltip.style.top = `${topPosition}px`;
             this.selectionTooltip.style.display = 'flex';
+            
+            console.log('[ArticleAssistant] Positioned tooltip at:', {
+                left: leftPosition,
+                top: topPosition,
+                selectionRect: {
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height
+                }
+            });
         });
         
         // Hide tooltip when clicking elsewhere

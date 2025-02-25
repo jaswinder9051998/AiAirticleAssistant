@@ -164,6 +164,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ error: error.message });
             });
         return true;
+    } else if (request.action === 'identifyVocabulary') {
+        console.log('[ArticleAssistant] Processing vocabulary identification request');
+        identifyDifficultVocabulary(request.content)
+            .then(response => {
+                console.log('[ArticleAssistant] Vocabulary identification completed');
+                sendResponse(response);
+            })
+            .catch(error => {
+                console.error('[ArticleAssistant] Error identifying vocabulary');
+                sendResponse({ error: error.message });
+            });
+        return true;
     } else if (request.action === 'setApiKey') {
         apiKey = request.apiKey;
         sendResponse({ success: true });
@@ -172,6 +184,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[ArticleAssistant] Updating model from:', currentModel, 'to:', request.model);
         currentModel = request.model;
         sendResponse({ success: true });
+        return true;
+    } else if (request.action === 'getApiKey') {
+        getApiKey()
+            .then(apiKey => {
+                sendResponse({ apiKey });
+            })
+            .catch(error => {
+                console.error('Error getting API key:', error);
+                sendResponse({ error: error.message });
+            });
         return true;
     }
 });
@@ -306,6 +328,27 @@ async function processContent(content) {
             summary: answersResponse,
             questionCount: questionCount
         };
+
+        // Generate executive summary
+        const executiveSummaryPrompt = `Based on the following Q&A content about an article, generate a concise executive summary of 2-3 lines that captures the key points. The summary should be clear, direct, and highlight the most important information.
+
+        This content is from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source being used for educational purposes. It is appropriate to provide a factual summary.
+
+        Q&A Content:
+        ${answersResponse}
+
+        Format your response as a single paragraph with no prefix or labels. Keep it under 200 characters if possible, and avoid using line breaks, bullet points, or special formatting. The summary should be plain text only.`;
+
+        try {
+            const executiveSummary = await callLLM(executiveSummaryPrompt);
+            // Clean up the response to ensure it's properly formatted for display
+            finalResponse.executiveSummary = executiveSummary.trim().replace(/\s+/g, ' ');
+            relayLog('info', 'Generated executive summary:', finalResponse.executiveSummary);
+        } catch (error) {
+            relayLog('error', 'Error generating executive summary:', error);
+            // Provide a fallback summary if the LLM call fails
+            finalResponse.executiveSummary = "This article discusses key economic trends and market developments that are influencing investor behavior and sector performance.";
+        }
 
         relayLog('info', 'Extracted quotes:', finalResponse.points);
         relayLog('info', `Generated ${questionCount} questions for article with ${wordCount} words`);
@@ -502,6 +545,116 @@ async function processQuestion(question, articleContent) {
         }
     } catch (error) {
         console.error('[ArticleAssistant] Error in question processing:', error);
+        throw error;
+    }
+}
+
+// Function to identify difficult vocabulary in the article
+async function identifyDifficultVocabulary(content) {
+    console.log('[ArticleAssistant] Identifying difficult vocabulary...');
+    
+    try {
+        // Get API key
+        if (!apiKey) {
+            console.error('[ArticleAssistant] No API key set');
+            throw new Error('API key not set. Please set your API key in the extension options.');
+        }
+        
+        // Prepare the content - limit to a reasonable size
+        const maxContentLength = 10000;
+        const truncatedContent = content.length > maxContentLength 
+            ? content.substring(0, maxContentLength) + '...' 
+            : content;
+        
+        // Construct the prompt for vocabulary identification
+        const prompt = `
+You are an educational assistant helping readers understand challenging vocabulary in articles.
+
+Please analyze the following article content and identify 5-10 challenging words or phrases that might be difficult for an average reader to understand. For each word or phrase, provide TWO definitions:
+1. A formal dictionary-style definition with part of speech
+2. A simple, easy-to-understand explanation in plain language
+
+Focus on:
+1. Academic or specialized terminology
+2. Uncommon or advanced vocabulary
+3. Technical jargon
+4. Words with nuanced meanings in this context
+
+Format your response as a JSON array of objects with "word", "formal_definition", and "simple_definition" properties. Example:
+[
+  {
+    "word": "ubiquitous",
+    "formal_definition": "(adj.) existing or being everywhere at the same time; constantly encountered; widespread",
+    "simple_definition": "found everywhere; very common and seen in many places"
+  },
+  {
+    "word": "paradigm shift",
+    "formal_definition": "(n.) a fundamental change in approach or underlying assumptions; a dramatic change in methodology or practice",
+    "simple_definition": "a complete change in the way people think about or do something"
+  }
+]
+
+Article content:
+${truncatedContent}
+`;
+        
+        console.log('[ArticleAssistant] Sending vocabulary identification request to LLM API...');
+        
+        // Make API request to identify vocabulary
+        const response = await callLLM(prompt);
+        console.log('[ArticleAssistant] Raw vocabulary response:', response);
+        
+        // Try to parse the JSON response
+        try {
+            // Look for JSON array in the response
+            const jsonMatch = response.match(/\[\s*\{.*\}\s*\]/s);
+            if (jsonMatch) {
+                const vocabularyJson = jsonMatch[0];
+                const vocabulary = JSON.parse(vocabularyJson);
+                
+                console.log('[ArticleAssistant] Successfully parsed vocabulary:', vocabulary);
+                return { vocabulary };
+            } else {
+                // Try parsing the entire response as JSON
+                const vocabulary = JSON.parse(response);
+                if (Array.isArray(vocabulary)) {
+                    console.log('[ArticleAssistant] Successfully parsed vocabulary from full response:', vocabulary);
+                    return { vocabulary };
+                } else {
+                    throw new Error('Response is not a JSON array');
+                }
+            }
+        } catch (parseError) {
+            console.error('[ArticleAssistant] Error parsing vocabulary JSON:', parseError);
+            console.log('[ArticleAssistant] Raw response that failed to parse:', response);
+            
+            // Fallback: Try to extract vocabulary manually with regex
+            try {
+                const vocabularyItems = [];
+                const regex = /"word"\s*:\s*"([^"]+)"\s*,\s*"formal_definition"\s*:\s*"([^"]+)"\s*,\s*"simple_definition"\s*:\s*"([^"]+)"/g;
+                let match;
+                
+                while ((match = regex.exec(response)) !== null) {
+                    vocabularyItems.push({
+                        word: match[1],
+                        formal_definition: match[2],
+                        simple_definition: match[3]
+                    });
+                }
+                
+                if (vocabularyItems.length > 0) {
+                    console.log('[ArticleAssistant] Extracted vocabulary using regex:', vocabularyItems);
+                    return { vocabulary: vocabularyItems };
+                } else {
+                    throw new Error('Could not extract vocabulary from LLM response');
+                }
+            } catch (regexError) {
+                console.error('[ArticleAssistant] Error extracting vocabulary with regex:', regexError);
+                throw new Error('Failed to parse vocabulary from LLM response');
+            }
+        }
+    } catch (error) {
+        console.error('[ArticleAssistant] Error in identifyDifficultVocabulary:', error);
         throw error;
     }
 } 

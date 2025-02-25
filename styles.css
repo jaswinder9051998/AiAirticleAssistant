@@ -236,6 +236,14 @@
     border-color: #fff transparent transparent;
 }
 
+/* When tooltip is positioned below the selection, arrow points up */
+.article-assistant-selection-tooltip.tooltip-below::after {
+    bottom: auto;
+    top: -8px;
+    border-width: 0 8px 8px;
+    border-color: transparent transparent #fff;
+}
+
 .article-assistant-selection-chat-button {
     background: #4CAF50;
     color: white;
@@ -351,4 +359,130 @@
 
 .article-assistant-answer br {
     line-height: 1.6;
+}
+
+/* Vocabulary assistance styles */
+.article-assistant-vocab {
+    background-color: rgba(147, 112, 219, 0.2);
+    border-bottom: 1px dotted #8a2be2;
+    cursor: help;
+    position: relative;
+    transition: background-color 0.2s ease;
+    z-index: 9998;
+}
+
+.article-assistant-vocab:hover {
+    background-color: rgba(147, 112, 219, 0.3);
+}
+
+.article-assistant-vocab-tooltip {
+    position: absolute;
+    z-index: 10002;
+    background-color: #fff;
+    color: #333;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 300px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    pointer-events: auto;
+}
+
+.article-assistant-vocab-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px 6px 0;
+    border-style: solid;
+    border-color: #fff transparent transparent;
+}
+
+/* For tooltips that would go off-screen to the top */
+.article-assistant-vocab-tooltip.tooltip-below {
+    bottom: auto;
+    top: 100%;
+    transform: translateX(-50%) translateY(8px);
+}
+
+.article-assistant-vocab-tooltip.tooltip-below::after {
+    top: auto;
+    bottom: 100%;
+    border-width: 0 6px 6px;
+    border-color: transparent transparent #fff;
+}
+
+/* For tooltips that would go off-screen to the left/right */
+.article-assistant-vocab-tooltip.tooltip-right {
+    left: 0;
+    transform: translateX(0) translateY(-8px);
+}
+
+.article-assistant-vocab-tooltip.tooltip-right::after {
+    left: 15px;
+}
+
+.article-assistant-vocab-tooltip.tooltip-left {
+    left: auto;
+    right: 0;
+    transform: translateX(0) translateY(-8px);
+}
+
+.article-assistant-vocab-tooltip.tooltip-left::after {
+    left: auto;
+    right: 15px;
+}
+
+/* Vocabulary word styling */
+.article-assistant-vocab-word {
+    font-weight: 500;
+    color: #6a1b9a;
+    margin-bottom: 6px;
+    font-style: italic;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(106, 27, 154, 0.2);
+    padding-bottom: 4px;
+}
+
+/* Separator between definitions */
+.article-assistant-vocab-separator {
+    height: 1px;
+    background-color: rgba(106, 27, 154, 0.1);
+    margin: 8px 0;
+    width: 100%;
+}
+
+.article-assistant-vocab-definition {
+    color: #333;
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+
+.article-assistant-vocab-definition:last-child {
+    margin-bottom: 0;
+}
+
+.article-assistant-vocab-definition.formal {
+    color: #444;
+    margin-bottom: 8px;
+}
+
+.article-assistant-vocab-definition.simple {
+    color: #2e7d32;
+    margin-top: 2px;
+}
+
+.article-assistant-vocab-definition strong {
+    color: #6a1b9a;
+    font-weight: 600;
+    margin-right: 4px;
 }
