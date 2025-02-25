@@ -53,37 +53,65 @@ class ArticleAssistant {
 
             // Process highlights
             for (const point of response.points) {
+                console.log('[ArticleAssistant] Processing highlight for:', point.substring(0, 50) + (point.length > 50 ? '...' : ''));
                 const range = this.highlights.findTextRange(point);
                 if (range) {
                     try {
-                        // Always highlight using individual text nodes within the range
-                        const nodes = this.highlights.getTextNodesInRange(range);
-                        const startNode = range.startContainer;
-                        const endNode = range.endContainer;
-                        const startOffset = range.startOffset;
-                        const endOffset = range.endOffset;
-                        for (const node of nodes) {
-                            const nodeText = node.textContent;
-                            let highlightStart = 0;
-                            let highlightEnd = nodeText.length;
-                            if (node === startNode) {
-                                highlightStart = startOffset;
+                        // Create highlight element
+                        const highlight = document.createElement('mark');
+                        highlight.className = 'article-assistant-highlight';
+                        highlight.dataset.quote = point; // Store the full quote for reference
+                        Object.assign(highlight.style, {
+                            backgroundColor: 'rgba(255, 255, 0, 0.3)',
+                            borderBottom: '1px solid rgba(255, 200, 0, 0.5)',
+                            padding: '2px 0',
+                            borderRadius: '2px',
+                            display: 'inline',
+                            position: 'relative',
+                            zIndex: '1'
+                        });
+                        
+                        // Try to surround the entire range first
+                        try {
+                            range.surroundContents(highlight);
+                            console.log('[ArticleAssistant] Successfully created single highlight');
+                        } catch (surroundError) {
+                            console.log('[ArticleAssistant] Could not create single highlight, using multi-node approach:', surroundError.message);
+                            
+                            // Fallback: Highlight each text node in the range separately
+                            const nodes = this.highlights.getTextNodesInRange(range);
+                            console.log('[ArticleAssistant] Found', nodes.length, 'text nodes to highlight');
+                            
+                            if (nodes.length === 0) {
+                                throw new Error('No text nodes found in range');
                             }
-                            if (node === endNode) {
-                                highlightEnd = endOffset;
-                            }
-                            if (highlightStart < highlightEnd) {
-                                const nodeRange = document.createRange();
-                                nodeRange.setStart(node, highlightStart);
-                                nodeRange.setEnd(node, highlightEnd);
-                                const highlightEl = document.createElement('span');
-                                highlightEl.className = 'article-assistant-highlight';
-                                nodeRange.surroundContents(highlightEl);
+                            
+                            for (const node of nodes) {
+                                try {
+                                    // Make sure node has content
+                                    if (!node.textContent.trim()) continue;
+                                    
+                                    const nodeRange = document.createRange();
+                                    nodeRange.selectNodeContents(node);
+                                    const nodeHighlight = highlight.cloneNode();
+                                    nodeHighlight.dataset.quote = point; // Store the full quote for reference
+                                    nodeRange.surroundContents(nodeHighlight);
+                                } catch (nodeError) {
+                                    console.error('[ArticleAssistant] Error highlighting node:', nodeError);
+                                }
                             }
                         }
                     } catch (error) {
                         console.error('[ArticleAssistant] Error creating highlight:', error);
+                        
+                        // Last resort: try to find and highlight any portion of the quote
+                        this.tryAlternativeHighlighting(point);
                     }
+                } else {
+                    console.error('[ArticleAssistant] Could not find range for quote:', point.substring(0, 50) + (point.length > 50 ? '...' : ''));
+                    
+                    // Try alternative highlighting methods
+                    this.tryAlternativeHighlighting(point);
                 }
             }
 
@@ -148,6 +176,87 @@ class ArticleAssistant {
         if (this.floatingCard) {
             this.floatingCard.remove();
             this.floatingCard = null;
+        }
+    }
+
+    // New method to attempt alternative ways of highlighting when the main method fails
+    tryAlternativeHighlighting(quote) {
+        console.log('[ArticleAssistant] Attempting alternative highlighting for quote');
+        
+        try {
+            // Split the quote into sentences or paragraphs and try to highlight each one
+            const sentences = quote.split(/(?<=[.!?])\s+/);
+            let foundAny = false;
+            
+            for (const sentence of sentences) {
+                if (sentence.length < 15) continue; // Skip very short segments
+                
+                const range = this.highlights.findTextRange(sentence);
+                if (range) {
+                    foundAny = true;
+                    try {
+                        const highlight = document.createElement('mark');
+                        highlight.className = 'article-assistant-highlight';
+                        highlight.dataset.quote = quote; // Store the full quote for reference
+                        highlight.dataset.partial = 'true'; // Mark as a partial highlight
+                        
+                        Object.assign(highlight.style, {
+                            backgroundColor: 'rgba(255, 255, 0, 0.3)',
+                            borderBottom: '1px solid rgba(255, 200, 0, 0.5)',
+                            padding: '2px 0',
+                            borderRadius: '2px',
+                            display: 'inline',
+                            position: 'relative',
+                            zIndex: '1'
+                        });
+                        
+                        range.surroundContents(highlight);
+                        console.log('[ArticleAssistant] Successfully created partial highlight for sentence:', 
+                                   sentence.substring(0, 30) + (sentence.length > 30 ? '...' : ''));
+                    } catch (error) {
+                        console.error('[ArticleAssistant] Error creating partial highlight:', error);
+                    }
+                }
+            }
+            
+            if (!foundAny) {
+                // As a last resort, try to find distinctive phrases in the quote
+                const words = quote.split(' ');
+                for (let i = 0; i < words.length - 3; i += 2) {
+                    const phrase = words.slice(i, i + 4).join(' ');
+                    if (phrase.length < 15) continue; // Skip short phrases
+                    
+                    const range = this.highlights.findTextRange(phrase);
+                    if (range) {
+                        try {
+                            const highlight = document.createElement('mark');
+                            highlight.className = 'article-assistant-highlight';
+                            highlight.dataset.quote = quote; // Store the full quote
+                            highlight.dataset.partial = 'true'; // Mark as a partial highlight
+                            
+                            Object.assign(highlight.style, {
+                                backgroundColor: 'rgba(255, 255, 0, 0.3)',
+                                borderBottom: '1px solid rgba(255, 200, 0, 0.5)',
+                                padding: '2px 0',
+                                borderRadius: '2px',
+                                display: 'inline',
+                                position: 'relative',
+                                zIndex: '1'
+                            });
+                            
+                            range.surroundContents(highlight);
+                            console.log('[ArticleAssistant] Created phrase highlight:', phrase);
+                            
+                            // Just find a few phrases to avoid cluttering the article
+                            if (i > 10) break;
+                        } catch (error) {
+                            console.error('[ArticleAssistant] Error creating phrase highlight:', error);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[ArticleAssistant] Alternative highlighting failed:', error);
         }
     }
 }

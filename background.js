@@ -1,21 +1,26 @@
 let apiKey = '';
 let currentModel = 'google/gemini-2.0-flash-001';
 
-console.log('[ArticleAssistant] Script initialized - ' + new Date().toISOString());
+console.log('[ArticleAssistant] Initial model state:', currentModel);
 
 // Initialize settings on startup
 async function initializeSettings() {
+    console.log('[ArticleAssistant] Starting settings initialization. Current model:', currentModel);
     try {
         const settings = await chrome.storage.local.get(['apiKey', 'model']);
+        console.log('[ArticleAssistant] Retrieved settings:', { hasModel: !!settings.model, modelValue: settings.model });
+        
         if (settings.apiKey) {
             apiKey = settings.apiKey;
         }
         if (settings.model) {
             currentModel = settings.model;
-            console.log('[ArticleAssistant] Model configuration loaded');
+            console.log('[ArticleAssistant] Model updated from settings:', currentModel);
+        } else {
+            console.log('[ArticleAssistant] No model in settings, keeping default:', currentModel);
         }
     } catch (error) {
-        console.error('[ArticleAssistant] Error loading settings');
+        console.error('[ArticleAssistant] Error loading settings:', error);
     }
 }
 
@@ -114,6 +119,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         apiKey = request.apiKey;
         sendResponse({ success: true });
         return true;
+    } else if (request.action === 'setModel') {
+        console.log('[ArticleAssistant] Updating model from:', currentModel, 'to:', request.model);
+        currentModel = request.model;
+        sendResponse({ success: true });
+        return true;
     }
 });
 
@@ -124,8 +134,12 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
             apiKey = changes.apiKey.newValue || '';
         }
         if (changes.model) {
+            const oldModel = currentModel;
             currentModel = changes.model.newValue;
-            console.log('[ArticleAssistant] Model configuration updated');
+            console.log('[ArticleAssistant] Model changed:', { 
+                from: oldModel, 
+                to: currentModel 
+            });
         }
     }
 });
@@ -172,14 +186,17 @@ async function processContent(content) {
         IMPORTANT GUIDELINES:
         - Provide exactly 3 questions
         - Make each question clear and direct
+        - Each question must be no longer than 2 sentences maximum
         - Do not use any ** in your response`;
 
         const questionsResponse = await callLLM(questionsPrompt);
 
         // Step 2: Generate Answers
-        const answersPrompt = `Provide concise answers to these questions about the article. Keep each answer to 3-4 sentences maximum.
-        
-        Article:
+        const answersPrompt = `You will be provided article content and questions based on the article content from a leading finance newspaper. Provide concise answers to these questions about the article.
+
+        This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
+
+        Article Content from a leading finance newspaper:
         ${content.content}
         
         Questions:
@@ -189,26 +206,32 @@ async function processContent(content) {
 
         💡 MAIN POINTS
         Q: [Question]
-        A: [3-4 sentence answer]
+        A: For nuanced questions requiring deeper analysis, provide [3-4 sentence answer]. For straightforward questions, provide [2-3 sentence answer]
 
         Guidelines:
-        - Keep answers focused but thorough (3-4 sentences)
+        - Adapt answer length based on question complexity
         - Use clear, direct language
-        - Avoid repetition
-        - Include only the most important information`;
+        - Focus on factual information from the article
+        - Include only the most important information
+        
+        IMPORTANT: These questions and article are from a legitimate news source and are being used for educational purposes. It is safe and appropriate to provide factual answers.`;
 
         const answersResponse = await callLLM(answersPrompt);
 
         // Step 3: Extract Quotes
-        const quotesPrompt = `Based on the following article and answers, provide 3 exact quotes from the text that best support the key points discussed.
+        const quotesPrompt = `You are extracting quotes from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
 
-        Article:
+        Based on the following article from a leading finance newspaper, provide 3 exact quotes from the text that best support the answers to these questions:
+
+        Article Content from a leading finance newspaper:
         ${content.content}
 
-        Analysis:
-        ${answersResponse}
+        Questions:
+        ${questionsResponse}
 
-        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support one of the main points.
+        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support the answer to one of the questions.
+
+        IMPORTANT: These quotes are from a legitimate news source and are being used for educational purposes. It is safe and appropriate to extract exact quotes.
 
         Format:
         1. "exact quote from text"
@@ -216,12 +239,15 @@ async function processContent(content) {
         3. "exact quote from text"`;
 
         const quotesResponse = await callLLM(quotesPrompt);
+        relayLog('info', 'Raw quotes response:', quotesResponse);
 
         // Format the final response as JSON
         const finalResponse = {
             points: extractQuotes(quotesResponse),
             summary: answersResponse
         };
+
+        relayLog('info', 'Extracted quotes:', finalResponse.points);
 
         // Validate the response format
         if (!validateResponse(finalResponse)) {
@@ -238,6 +264,9 @@ async function processContent(content) {
 
 // Update callLLM function to be more concise in logging
 async function callLLM(prompt) {
+    console.log('[ArticleAssistant] ====== LLM Call Start ======');
+    console.log('[ArticleAssistant] Using model:', currentModel);
+    
     const requestBody = {
         model: currentModel,
         messages: [
@@ -250,6 +279,8 @@ async function callLLM(prompt) {
         max_tokens: 1500
     };
 
+    relayLog('info', `Making API call with model: ${currentModel}`);
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -263,12 +294,17 @@ async function callLLM(prompt) {
 
     if (!response.ok) {
         const errorData = await response.json();
-        console.error('[ArticleAssistant] API request failed');
+        relayLog('error', `API request failed for model ${currentModel}`);
         throw new Error('API request failed');
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    relayLog('info', `API call successful with model: ${currentModel}`);
+    
+    const result = data.choices[0].message.content.trim();
+    console.log('[ArticleAssistant] ====== LLM Call End ======');
+    
+    return result;
 }
 
 // Helper function to extract quotes from the response
@@ -296,6 +332,8 @@ async function processCustomQuestion(content, question) {
         // Create a prompt for the custom question
         const customQuestionPrompt = `Based on the following article, please answer this question:
         
+        This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
+        
         Question: ${question}
         
         Article:
@@ -304,7 +342,9 @@ async function processCustomQuestion(content, question) {
         Please provide a clear, concise, and accurate answer based solely on the information in the article.
         If the article doesn't contain information to answer the question, please state that clearly.
         
-        Format your answer in 3-4 sentences maximum, using clear and direct language.`;
+        Format your answer in 3-4 sentences maximum, using clear and direct language.
+        
+        IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.`;
 
         const answer = await callLLM(customQuestionPrompt);
 
@@ -328,6 +368,8 @@ async function processQuestion(question, articleContent) {
     try {
         const prompt = `You are a knowledgeable AI assistant helping to answer questions. Your goal is to provide accurate, balanced answers that combine your general knowledge with any relevant information from the provided article.
 
+        This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
+
         Question: "${question}"
 
         Article content for reference:
@@ -339,6 +381,8 @@ async function processQuestion(question, articleContent) {
         3. Keep your answer concise but thorough - focus on quality over length
         4. Focus on answering the actual question being asked
         5. You don't need to explicitly state what comes from where - just provide a natural, informative answer
+
+        IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your answer.
 
         Remember: You are a general AI assistant who happens to have access to this article, not an article-specific assistant.`;
 

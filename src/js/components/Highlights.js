@@ -4,27 +4,77 @@ class Highlights {
     }
 
     findTextRange(text) {
-        console.log('[ArticleAssistant] Starting findTextRange with full text:', text);
+        console.log('[ArticleAssistant] Starting findTextRange with text:', text.substring(0, 100) + (text.length > 100 ? '...' : ''));
         
-        // Find the article container
-        const articleElement = document.querySelector('article');
+        // Find the article container - try multiple selectors to improve chances of finding the content
+        const selectors = ['article', '[role="main"]', 'main', '.article', '.post', '.content', '.article-content', '#article-body', '.story-body'];
+        let articleElement = null;
+        
+        for (const selector of selectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+                articleElement = el;
+                console.log('[ArticleAssistant] Found article container using selector:', selector);
+                break;
+            }
+        }
+        
         if (!articleElement) {
-            console.error('[ArticleAssistant] No article element found');
-            return null;
+            console.error('[ArticleAssistant] No article element found using any selector');
+            // Fallback to body as last resort
+            articleElement = document.body;
         }
 
+        // Normalize search text for more reliable matching
+        const normalizeText = (str) => {
+            return str.toLowerCase()
+                     .replace(/[\u2018\u2019'']/g, "'")
+                     .replace(/[\u201C\u201D""]/g, '"')
+                     .replace(/\s+/g, ' ')
+                     .replace(/\n/g, ' ') // Replace newlines with spaces
+                     .replace(/\t/g, ' ') // Replace tabs with spaces
+                     .replace(/\r/g, '') // Remove carriage returns
+                     .trim();
+        };
+        
+        const normalizedSearchText = normalizeText(text);
+        console.log('[ArticleAssistant] Normalized search text:', normalizedSearchText.substring(0, 100) + (normalizedSearchText.length > 100 ? '...' : ''));
+
+        // Try exact match first
+        console.log('[ArticleAssistant] Attempting exact match...');
+        const exactRange = this.findExactText(articleElement, normalizedSearchText);
+        if (exactRange) {
+            console.log('[ArticleAssistant] Exact match found!');
+            return exactRange;
+        }
+        
+        // If exact match fails, try fuzzy matching with different strategies
+        console.log('[ArticleAssistant] Exact match failed, trying fuzzy match');
+        const fuzzyRange = this.findFuzzyText(articleElement, normalizedSearchText);
+        
+        if (fuzzyRange) {
+            console.log('[ArticleAssistant] Fuzzy match found!');
+            return fuzzyRange;
+        }
+        
+        console.log('[ArticleAssistant] All matching methods failed for text:', normalizedSearchText.substring(0, 100));
+        return null;
+    }
+    
+    findExactText(container, searchText) {
         // Get all text nodes in the article
         const textNodes = [];
         const walker = document.createTreeWalker(
-            articleElement,
+            container,
             NodeFilter.SHOW_TEXT,
             {
                 acceptNode: function(node) {
                     // Skip hidden elements and unwanted content
                     const parent = node.parentElement;
                     if (!parent || 
-                        parent.closest('script, style, noscript, .article-assistant-floating-card') ||
-                        getComputedStyle(parent).display === 'none') {
+                        parent.closest('script, style, noscript, .article-assistant-floating-card, nav, header:not(article header), footer:not(article footer)') ||
+                        getComputedStyle(parent).display === 'none' ||
+                        getComputedStyle(parent).visibility === 'hidden') {
                         return NodeFilter.FILTER_REJECT;
                     }
                     return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.SKIP;
@@ -46,24 +96,28 @@ class Highlights {
             }
         }
 
-        // Normalize search text and full text
+        // Normalize full text
         const normalizeText = (str) => {
             return str.toLowerCase()
                      .replace(/[\u2018\u2019'']/g, "'")
                      .replace(/[\u201C\u201D""]/g, '"')
                      .replace(/\s+/g, ' ')
+                     .replace(/\n/g, ' ') // Replace newlines with spaces
+                     .replace(/\t/g, ' ') // Replace tabs with spaces
+                     .replace(/\r/g, '') // Remove carriage returns
                      .trim();
         };
-
-        const normalizedSearchText = normalizeText(text);
+        
         const normalizedFullText = normalizeText(fullText);
 
         // Find the text position
-        const textIndex = normalizedFullText.indexOf(normalizedSearchText);
+        const textIndex = normalizedFullText.indexOf(searchText);
         if (textIndex === -1) {
-            console.log('[ArticleAssistant] Text not found:', {
-                searchText: normalizedSearchText,
-                fullTextSample: normalizedFullText.substring(0, 200)
+            console.log('[ArticleAssistant] Text not found in exact search:', {
+                searchTextLength: searchText.length,
+                searchTextSample: searchText.substring(0, 50) + (searchText.length > 50 ? '...' : ''),
+                fullTextLength: normalizedFullText.length,
+                fullTextSample: normalizedFullText.substring(0, 200) + (normalizedFullText.length > 200 ? '...' : '')
             });
             return null;
         }
@@ -83,9 +137,9 @@ class Highlights {
                 startOffset = textIndex - currentIndex;
             }
             
-            if (!endNode && currentIndex + nodeTextLength > textIndex + normalizedSearchText.length) {
+            if (!endNode && currentIndex + nodeTextLength > textIndex + searchText.length) {
                 endNode = nodeInfo.node;
-                endOffset = textIndex + normalizedSearchText.length - currentIndex;
+                endOffset = Math.min(textIndex + searchText.length - currentIndex, nodeInfo.text.length);
                 break;
             }
             
@@ -93,60 +147,220 @@ class Highlights {
         }
 
         if (!startNode || !endNode) {
-            console.error('[ArticleAssistant] Could not find text boundaries');
+            console.error('[ArticleAssistant] Could not find text boundaries in exact search');
             return null;
         }
 
         try {
             // Create the range
             const range = document.createRange();
+            
+            // Make sure offsets are within valid bounds
+            startOffset = Math.max(0, Math.min(startOffset, startNode.textContent.length));
+            endOffset = Math.max(0, Math.min(endOffset, endNode.textContent.length));
+            
             range.setStart(startNode, startOffset);
             range.setEnd(endNode, endOffset);
-
-            // Create highlight with inline styles
-            const highlight = document.createElement('mark');
-            highlight.className = 'article-assistant-highlight';
-            Object.assign(highlight.style, {
-                backgroundColor: 'rgba(255, 255, 0, 0.3)',
-                borderBottom: '1px solid rgba(255, 200, 0, 0.5)',
-                padding: '2px 0',
-                borderRadius: '2px',
-                display: 'inline',
-                position: 'relative',
-                zIndex: '1'
-            });
-
-            try {
-                range.surroundContents(highlight);
-                console.log('[ArticleAssistant] Successfully created highlight');
-                return range;
-            } catch (surroundError) {
-                console.error('[ArticleAssistant] Error surrounding range:', surroundError);
+            return range;
+        } catch (error) {
+            console.error('[ArticleAssistant] Error creating range in exact search:', error);
+            return null;
+        }
+    }
+    
+    findFuzzyText(container, searchText) {
+        // Try with different variations of paragraph breaks or line breaks
+        const variations = [
+            searchText,
+            searchText.replace(/\.\s+/g, '. '),  // Normalize period + whitespace combinations
+            searchText.replace(/\.\s+/g, '.'),   // Remove spaces after periods
+            searchText.replace(/\s+/g, ' ')      // Normalize all whitespace
+        ];
+        
+        for (const variant of variations) {
+            const variantRange = this.findExactText(container, variant);
+            if (variantRange) {
+                console.log('[ArticleAssistant] Found variant match');
+                return variantRange;
+            }
+        }
+        
+        // If search text is too long, try with segments
+        if (searchText.length > 100) {
+            // Try the first 100 characters
+            const firstSegment = searchText.substring(0, 100);
+            const firstRange = this.findExactText(container, firstSegment);
+            
+            if (firstRange) {
+                console.log('[ArticleAssistant] Found first segment of long text');
+                return this.expandRangeForBetterVisibility(firstRange, container);
+            }
+            
+            // Try middle 100 characters
+            if (searchText.length > 200) {
+                const middleStart = Math.floor(searchText.length / 2) - 50;
+                const middleSegment = searchText.substring(middleStart, middleStart + 100);
+                const middleRange = this.findExactText(container, middleSegment);
                 
-                // Fallback: Try to highlight each text node in the range separately
-                const nodes = this.getTextNodesInRange(range);
-                for (const node of nodes) {
-                    const nodeRange = document.createRange();
-                    nodeRange.selectNodeContents(node);
-                    const nodeHighlight = highlight.cloneNode();
-                    nodeRange.surroundContents(nodeHighlight);
+                if (middleRange) {
+                    console.log('[ArticleAssistant] Found middle segment of long text');
+                    return this.expandRangeForBetterVisibility(middleRange, container);
+                }
+            }
+            
+            // Try last 100 characters
+            const lastSegment = searchText.substring(searchText.length - 100);
+            const lastRange = this.findExactText(container, lastSegment);
+            
+            if (lastRange) {
+                console.log('[ArticleAssistant] Found last segment of long text');
+                return this.expandRangeForBetterVisibility(lastRange, container);
+            }
+            
+            // Try first 75% of the text
+            const partialSegment = searchText.substring(0, Math.floor(searchText.length * 0.75));
+            const partialRange = this.findExactText(container, partialSegment);
+            
+            if (partialRange) {
+                console.log('[ArticleAssistant] Found partial segment of long text');
+                return this.expandRangeForBetterVisibility(partialRange, container);
+            }
+            
+            // Try larger chunks between 200-300 chars
+            for (let i = 0; i < searchText.length - 200; i += 100) {
+                const chunkSize = Math.min(300, searchText.length - i);
+                const chunk = searchText.substring(i, i + chunkSize);
+                const chunkRange = this.findExactText(container, chunk);
+                
+                if (chunkRange) {
+                    console.log('[ArticleAssistant] Found chunk in long text at position', i);
+                    return this.expandRangeForBetterVisibility(chunkRange, container);
+                }
+            }
+        }
+        
+        // Split into chunks and try to match any chunk
+        const words = searchText.split(' ');
+        if (words.length > 5) {
+            // Try different segments of the text with various window sizes
+            const windowSizes = [10, 8, 5];
+            
+            for (const windowSize of windowSizes) {
+                if (words.length <= windowSize) continue;
+                
+                // Try beginning, middle, and end sections
+                const segments = [
+                    words.slice(0, windowSize).join(' '),
+                    words.slice(Math.floor(words.length/2) - Math.floor(windowSize/2), 
+                                Math.floor(words.length/2) + Math.ceil(windowSize/2)).join(' '),
+                    words.slice(-windowSize).join(' ')
+                ];
+                
+                for (const segment of segments) {
+                    if (segment.length < 15) continue; // Skip very short segments
+                    
+                    const segmentRange = this.findExactText(container, segment);
+                    if (segmentRange) {
+                        console.log('[ArticleAssistant] Found segment of text:', segment);
+                        return this.expandRangeForBetterVisibility(segmentRange, container);
+                    }
                 }
                 
-                return range;
+                // Try sliding window approach
+                if (words.length > windowSize * 2) {
+                    for (let i = windowSize; i < words.length - windowSize; i += Math.ceil(windowSize/2)) {
+                        const segment = words.slice(i, i + windowSize).join(' ');
+                        if (segment.length < 15) continue;
+                        
+                        const segmentRange = this.findExactText(container, segment);
+                        if (segmentRange) {
+                            console.log('[ArticleAssistant] Found sliding window segment at position', i);
+                            return this.expandRangeForBetterVisibility(segmentRange, container);
+                        }
+                    }
+                }
             }
+        }
+        
+        // If all else fails, try matching distinctive phrases of the quote
+        // Find phrases that are 3-4 words long and unique
+        for (let i = 0; i < words.length - 3; i++) {
+            const phrase = words.slice(i, i + 4).join(' ');
+            if (phrase.length > 15) { // Only use reasonably distinctive phrases
+                const phraseRange = this.findExactText(container, phrase);
+                if (phraseRange) {
+                    console.log('[ArticleAssistant] Found distinctive phrase:', phrase);
+                    return this.expandRangeForBetterVisibility(phraseRange, container);
+                }
+            }
+        }
+        
+        console.log('[ArticleAssistant] Failed to find text with all fuzzy methods');
+        return null;
+    }
+    
+    // Expand the range to include more surrounding context for better visibility
+    expandRangeForBetterVisibility(range, container) {
+        try {
+            // Get the common ancestor and examine siblings
+            const ancestor = range.commonAncestorContainer;
+            let startNode = range.startContainer;
+            let endNode = range.endContainer;
+            
+            // If we're working with short text fragments, try to expand to paragraph level
+            if (startNode === endNode && startNode.textContent.length < 100) {
+                // Find the nearest paragraph or block element
+                let blockParent = startNode.parentNode;
+                while (blockParent && 
+                       blockParent !== container && 
+                       getComputedStyle(blockParent).display !== 'block') {
+                    blockParent = blockParent.parentNode;
+                }
+                
+                if (blockParent && blockParent !== container) {
+                    const expandedRange = document.createRange();
+                    expandedRange.selectNodeContents(blockParent);
+                    console.log('[ArticleAssistant] Expanded range to block level');
+                    return expandedRange;
+                }
+            }
+            
+            return range;
         } catch (error) {
-            console.error('[ArticleAssistant] Error creating range:', error);
-            return null;
+            console.error('[ArticleAssistant] Error expanding range:', error);
+            return range; // Return the original range if expansion fails
         }
     }
 
     getTextNodesInRange(range) {
         const nodes = [];
+        
+        // Handle the case where the range spans multiple blocks
+        const commonAncestor = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+            ? range.commonAncestorContainer.parentNode
+            : range.commonAncestorContainer;
+            
+        console.log('[ArticleAssistant] Getting text nodes in range with common ancestor:', 
+                   commonAncestor.nodeName, 
+                   commonAncestor.className);
+        
         const walker = document.createTreeWalker(
-            range.commonAncestorContainer,
+            commonAncestor,
             NodeFilter.SHOW_TEXT,
             {
                 acceptNode: function(node) {
+                    // Skip empty nodes and hidden content
+                    if (!node.textContent.trim()) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    
+                    const parent = node.parentNode;
+                    if (parent && 
+                        (parent.closest('script, style, noscript, .article-assistant-floating-card') ||
+                         getComputedStyle(parent).display === 'none')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    
                     if (range.intersectsNode(node)) {
                         return NodeFilter.FILTER_ACCEPT;
                     }
@@ -159,6 +373,8 @@ class Highlights {
         while (node = walker.nextNode()) {
             nodes.push(node);
         }
+        
+        console.log('[ArticleAssistant] Found', nodes.length, 'text nodes in range');
         return nodes;
     }
 

@@ -327,9 +327,108 @@ class FloatingCard {
 
     scrollToHighlight(index) {
         const highlights = document.querySelectorAll('.article-assistant-highlight');
-        if (highlights[index]) {
-            highlights[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (highlights.length === 0) {
+            console.error('[ArticleAssistant] No highlights found in document');
+            return;
+        }
+
+        const points = this.card.querySelectorAll('.article-assistant-point');
+        const clickedQuote = points[index]?.textContent;
+        
+        if (!clickedQuote) {
+            console.error('[ArticleAssistant] Could not find quote at index', index);
+            return;
+        }
+        
+        console.log('[ArticleAssistant] Looking for highlight matching quote:', clickedQuote.substring(0, 40) + '...');
+        
+        // Find all highlights that match this quote
+        const matchingHighlights = Array.from(highlights).filter(highlight => {
+            // Check using dataset.quote if available
+            if (highlight.dataset.quote) {
+                return highlight.dataset.quote === clickedQuote;
+            }
+            // Fallback to comparing text content
+            return highlight.textContent === clickedQuote;
+        });
+        
+        if (matchingHighlights.length > 0) {
+            // Use the first matching highlight (there could be multiple for the same quote)
+            matchingHighlights[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
             this.updateActivePoint(index);
+            
+            // Apply a temporary visual effect to make the highlight more visible
+            const originalBackground = matchingHighlights[0].style.backgroundColor;
+            matchingHighlights[0].style.backgroundColor = 'rgba(255, 255, 0, 0.6)';
+            matchingHighlights[0].style.transition = 'background-color 0.5s ease';
+            
+            setTimeout(() => {
+                matchingHighlights[0].style.backgroundColor = originalBackground;
+            }, 2000);
+            
+            console.log('[ArticleAssistant] Successfully scrolled to matching highlight');
+        } else {
+            // If no exact match, try to find a partial match
+            console.log('[ArticleAssistant] No exact match found, trying partial matches');
+            let bestMatch = null;
+            let highestSimilarity = 0;
+            
+            // Function to compute similarity between two strings
+            const similarity = (s1, s2) => {
+                const longer = s1.length > s2.length ? s1 : s2;
+                const shorter = s1.length > s2.length ? s2 : s1;
+                
+                if (longer.length === 0) return 1.0;
+                
+                // Check if the longer string contains the shorter
+                if (longer.includes(shorter)) return 0.8;
+                
+                // Count common words
+                const words1 = s1.toLowerCase().split(/\s+/);
+                const words2 = s2.toLowerCase().split(/\s+/);
+                const commonWords = words1.filter(word => words2.includes(word)).length;
+                return commonWords / Math.max(words1.length, words2.length);
+            };
+            
+            // Try to find partial matches
+            for (const highlight of highlights) {
+                // Skip if this is a partial highlight and there's a full match available
+                if (highlight.dataset.partial === 'true' && !matchingHighlights.length) continue;
+                
+                // Try to compare with the quote
+                const highlightText = highlight.dataset.quote || highlight.textContent;
+                const sim = similarity(clickedQuote, highlightText);
+                
+                if (sim > highestSimilarity) {
+                    highestSimilarity = sim;
+                    bestMatch = highlight;
+                }
+            }
+            
+            if (bestMatch && highestSimilarity > 0.3) {
+                bestMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                this.updateActivePoint(index);
+                
+                // Apply a temporary visual effect
+                const originalBackground = bestMatch.style.backgroundColor;
+                bestMatch.style.backgroundColor = 'rgba(255, 200, 0, 0.6)';
+                bestMatch.style.transition = 'background-color 0.5s ease';
+                
+                setTimeout(() => {
+                    bestMatch.style.backgroundColor = originalBackground;
+                }, 2000);
+                
+                console.log('[ArticleAssistant] Scrolled to partial match with similarity:', highestSimilarity);
+            } else {
+                console.error('[ArticleAssistant] No matching highlight found for quote');
+                
+                // Default to index-based navigation as fallback
+                if (highlights[index]) {
+                    highlights[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    this.updateActivePoint(index);
+                    console.log('[ArticleAssistant] Falling back to index-based navigation');
+                }
+            }
         }
     }
 
