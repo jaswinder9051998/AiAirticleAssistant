@@ -123,52 +123,122 @@ class ArticleAssistant {
     }
 
     createAndShowQuestionBox() {
-        if (!this.floatingCard) {
-            console.error('[ArticleAssistant] No floating card available');
-            return;
-        }
-
-        const questionBox = new QuestionBox(
-            this.floatingCard,
-            async (question) => {
+        console.log('[ArticleAssistant] Creating question box...');
+        
+        try {
+            // Define onSubmitHandler separately for easier debugging
+            const onSubmitHandler = (question) => {
+                console.log('[ArticleAssistant] onSubmitHandler called with question:', question);
+                
                 try {
-                    console.log('[ArticleAssistant] Processing question:', question);
+                    console.log('[ArticleAssistant] Extracting page content...');
+                    const pageContent = this.extractPageContent();
+                    console.log('[ArticleAssistant] Page content extracted, length:', pageContent ? pageContent.length : 0);
                     
-                    // Get the article content
-                    const extractedContent = TextProcessing.extractPageContent();
-                    if (!extractedContent.content) {
-                        throw new Error('Could not extract article content. Please try reloading the page.');
+                    if (!pageContent) {
+                        const error = new Error('Failed to extract page content');
+                        console.error('[ArticleAssistant] ' + error.message);
+                        throw error;
                     }
                     
-                    // Send message to background script
-                    const response = await chrome.runtime.sendMessage({
-                        action: 'processQuestion',
-                        content: question,
-                        articleContent: extractedContent.content
+                    console.log('[ArticleAssistant] Sending message to background: PROCESS_QUESTION');
+                    chrome.runtime.sendMessage({
+                        action: 'PROCESS_QUESTION',
+                        question: question,
+                        articleContent: pageContent
+                    }, (response) => {
+                        console.log('[ArticleAssistant] Received response from background:', response);
+                        
+                        if (!response) {
+                            const error = new Error('No response from background script');
+                            console.error('[ArticleAssistant] ' + error.message);
+                            throw error;
+                        }
+                        
+                        if (response.error) {
+                            const error = new Error(response.error);
+                            console.error('[ArticleAssistant] Background script error:', error.message);
+                            throw error;
+                        }
+                        
+                        console.log('[ArticleAssistant] Adding custom Q&A to floating card');
+                        this.floatingCard.addCustomQA(question, response.answer);
+                        console.log('[ArticleAssistant] Q&A added successfully');
+                        
+                        // Hide the question box after successful submission
+                        if (this.questionBox) {
+                            this.questionBox.remove();
+                            this.questionBox = null;
+                        }
                     });
-
-                    if (!response) {
-                        throw new Error('No response received from background script');
-                    }
-
-                    if (response.error) {
-                        throw new Error(response.error);
-                    }
-
-                    if (!response.answer) {
-                        throw new Error('No answer received in response');
-                    }
-
-                    // Add the Q&A to the main card
-                    this.floatingCard.addCustomQA(question, response.answer);
+                    
+                    return true;
                 } catch (error) {
-                    console.error('[ArticleAssistant] Error processing question:', error);
+                    console.error('[ArticleAssistant] Error in onSubmitHandler:', error);
                     throw error;
                 }
+            };
+            
+            console.log('[ArticleAssistant] onSubmitHandler type:', typeof onSubmitHandler);
+            
+            // Important: Remove any existing question box first
+            if (this.questionBox) {
+                console.log('[ArticleAssistant] Removing existing question box');
+                this.questionBox.remove();
+                this.questionBox = null;
             }
-        );
-
-        questionBox.create();
+            
+            // Also check for any orphaned question boxes in the DOM
+            const existingBoxes = document.querySelectorAll('.article-assistant-question-box');
+            if (existingBoxes.length > 0) {
+                console.log(`[ArticleAssistant] Found ${existingBoxes.length} orphaned question boxes, removing them`);
+                existingBoxes.forEach(box => box.parentNode && box.parentNode.removeChild(box));
+            }
+            
+            // Create and show the question box
+            console.log('[ArticleAssistant] Creating QuestionBox with onSubmitHandler');
+            this.questionBox = new QuestionBox(this.floatingCard, onSubmitHandler);
+            
+            // Verify the question box was created
+            if (!this.questionBox) {
+                throw new Error('Failed to create question box instance');
+            }
+            
+            console.log('[ArticleAssistant] QuestionBox created, showing...');
+            this.questionBox.show();
+            
+            // Verify the box element exists and is in the DOM
+            if (this.questionBox.box) {
+                console.log('[ArticleAssistant] Question box element created:', {
+                    inDOM: document.body.contains(this.questionBox.box),
+                    styles: {
+                        display: this.questionBox.box.style.display,
+                        visibility: this.questionBox.box.style.visibility,
+                        opacity: this.questionBox.box.style.opacity,
+                        zIndex: this.questionBox.box.style.zIndex
+                    },
+                    dimensions: this.questionBox.box.getBoundingClientRect()
+                });
+                
+                // Force the question box to be visible in case there are CSS conflicts
+                setTimeout(() => {
+                    if (this.questionBox && this.questionBox.box) {
+                        const boxEl = this.questionBox.box;
+                        boxEl.style.setProperty('display', 'block', 'important');
+                        boxEl.style.setProperty('visibility', 'visible', 'important');
+                        boxEl.style.setProperty('opacity', '1', 'important');
+                        boxEl.style.setProperty('z-index', '2147483647', 'important');
+                        console.log('[ArticleAssistant] Forced question box visibility after timeout');
+                    }
+                }, 200);
+            } else {
+                console.error('[ArticleAssistant] Question box element not created after show()');
+            }
+            
+            console.log('[ArticleAssistant] QuestionBox show process completed');
+        } catch (error) {
+            console.error('[ArticleAssistant] Error creating/showing question box:', error);
+        }
     }
 
     clearHighlights() {
@@ -257,6 +327,32 @@ class ArticleAssistant {
             }
         } catch (error) {
             console.error('[ArticleAssistant] Alternative highlighting failed:', error);
+        }
+    }
+
+    // Add extractPageContent method
+    extractPageContent() {
+        console.log('[ArticleAssistant] Extracting page content using TextProcessing...');
+        try {
+            const result = TextProcessing.extractPageContent();
+            console.log('[ArticleAssistant] Content extraction result:', {
+                success: !!result,
+                hasContent: result && result.content && result.content.length > 0,
+                contentLength: result?.content?.length || 0,
+                contentType: result?.isArticle ? 'article' : 
+                            result?.isSelection ? 'selection' : 
+                            result?.isCleanedBody ? 'cleaned body' : 'unknown'
+            });
+            
+            if (!result || !result.content) {
+                console.error('[ArticleAssistant] No content extracted');
+                return null;
+            }
+            
+            return result.content;
+        } catch (error) {
+            console.error('[ArticleAssistant] Error in extractPageContent:', error);
+            return null;
         }
     }
 }

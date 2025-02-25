@@ -107,24 +107,24 @@ class FloatingCard {
         buttonContainer.style.cssText = `
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             margin-left: auto;
         `;
 
         const askButton = document.createElement('button');
         askButton.className = 'article-assistant-card-button';
-        askButton.innerHTML = '❓';
+        askButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
         askButton.title = 'Ask a Question';
 
         const minimizeBtn = document.createElement('button');
         minimizeBtn.className = 'article-assistant-card-button';
-        minimizeBtn.innerHTML = '−';
+        minimizeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
         minimizeBtn.title = 'Minimize';
         minimizeBtn.onclick = () => this.toggleMinimize();
 
         const closeBtn = document.createElement('button');
         closeBtn.className = 'article-assistant-card-button';
-        closeBtn.innerHTML = '×';
+        closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
         closeBtn.title = 'Close';
         closeBtn.onclick = () => this.remove();
 
@@ -143,9 +143,9 @@ class FloatingCard {
     createAskSection(onAskButtonClick) {
         const askSection = document.createElement('div');
         askSection.style.cssText = `
-            padding: 12px 20px;
-            background-color: #F8F9FA;
-            border-bottom: 1px solid #E5E5E5;
+            padding: 16px 24px;
+            background-color: #FAFAFA;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
             display: block;
             flex-shrink: 0;
         `;
@@ -153,22 +153,6 @@ class FloatingCard {
         const askButton = document.createElement('button');
         askButton.className = 'article-assistant-reveal-question-button';
         askButton.textContent = '✨ Ask a Question About This Article';
-        askButton.style.cssText = `
-            display: block;
-            width: 100%;
-            padding: 12px 20px;
-            background-color: #1A73E8;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 15px;
-            cursor: pointer;
-            text-align: center;
-            position: relative;
-            z-index: 10001;
-            margin: 0;
-        `;
         
         askButton.onclick = onAskButtonClick;
         askSection.appendChild(askButton);

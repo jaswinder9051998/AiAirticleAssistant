@@ -35,6 +35,7 @@
         "src/js/components/QuestionBox.js",
         "src/js/services/ArticleAssistant.js",
         "src/js/services/ArticleManager.js",
+        "src/js/fixes/question-box-fix.js",
         "src/js/index.js"
       ],
       "css": ["styles.css"]

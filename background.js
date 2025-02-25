@@ -8,11 +8,19 @@ async function initializeSettings() {
     console.log('[ArticleAssistant] Starting settings initialization. Current model:', currentModel);
     try {
         const settings = await chrome.storage.local.get(['apiKey', 'model']);
-        console.log('[ArticleAssistant] Retrieved settings:', { hasModel: !!settings.model, modelValue: settings.model });
+        console.log('[ArticleAssistant] Retrieved settings:', { 
+            hasApiKey: !!settings.apiKey, 
+            apiKeyLength: settings.apiKey ? settings.apiKey.length : 0,
+            modelValue: settings.model 
+        });
         
         if (settings.apiKey) {
             apiKey = settings.apiKey;
+            console.log('[ArticleAssistant] API key loaded from storage, length:', apiKey.length);
+        } else {
+            console.warn('[ArticleAssistant] No API key found in storage');
         }
+        
         if (settings.model) {
             currentModel = settings.model;
             console.log('[ArticleAssistant] Model updated from settings:', currentModel);
@@ -46,8 +54,8 @@ function validateResponse(data) {
         return false;
     }
     
-    // Check if we have the right number of points
-    if (data.points.length < 3 || data.points.length > 5) {
+    // Check if we have at least one point, but not too many
+    if (data.points.length < 1 || data.points.length > 5) {
         console.error('[ArticleAssistant] Invalid number of points:', data.points.length);
         return false;
     }
@@ -87,8 +95,64 @@ chrome.tabs.onActivated.addListener(function(activeInfo) {
 // Add variable to store current article content
 let currentArticleContent = null;
 
+// Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'processWithLLM') {
+    console.log('[ArticleAssistant-BG] Message received:', { 
+        action: request.action, 
+        sender: sender.id,
+        tabId: sender.tab ? sender.tab.id : 'none',
+        messageSize: JSON.stringify(request).length,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Special debug logging for processQuestion messages
+    if (request.action === 'PROCESS_QUESTION') {
+        console.log('[ArticleAssistant-BG] Question processing request details:', {
+            questionLength: request.question ? request.question.length : 0,
+            questionPreview: request.question ? request.question.substring(0, 30) + '...' : 'none',
+            articleContentPresent: !!request.articleContent,
+            articleContentLength: request.articleContent ? request.articleContent.length : 0
+        });
+    }
+    
+    // Handle different actions
+    if (request.action === 'PROCESS_QUESTION') {
+        console.log('[ArticleAssistant] Processing question:', {
+            questionLength: request.question?.length || 0,
+            questionPreview: request.question?.substring(0, 30) + '...',
+            hasArticleContent: !!request.articleContent,
+            articleContentLength: request.articleContent?.length || 0,
+            apiKeyExists: !!apiKey,
+            apiKeyLength: apiKey?.length || 0
+        });
+        
+        if (!request.question) {
+            const error = 'No question content provided';
+            console.error('[ArticleAssistant] ' + error);
+            sendResponse({ error });
+            return;
+        }
+        
+        if (!request.articleContent) {
+            const error = 'No article content provided';
+            console.error('[ArticleAssistant] ' + error);
+            sendResponse({ error });
+            return;
+        }
+        
+        processQuestion(request.question, request.articleContent)
+            .then(answer => {
+                console.log('[ArticleAssistant] Question processed successfully, answer length:', answer.length);
+                sendResponse({ answer });
+            })
+            .catch(error => {
+                console.error('[ArticleAssistant] Error processing question:', error);
+                sendResponse({ error: error.message });
+            });
+        
+        // Return true to indicate we'll respond asynchronously
+        return true;
+    } else if (request.action === 'processWithLLM') {
         console.log('[ArticleAssistant] Processing content with LLM');
         processContent(request.content)
             .then(response => {
@@ -97,21 +161,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             })
             .catch(error => {
                 console.error('[ArticleAssistant] Error processing content');
-                sendResponse({ error: error.message });
-            });
-        return true;
-    } else if (request.action === 'processQuestion') {
-        console.log('[ArticleAssistant] Processing question');
-        if (!request.articleContent && currentArticleContent) {
-            request.articleContent = currentArticleContent;
-        }
-        processQuestion(request.content, request.articleContent)
-            .then(response => {
-                console.log('[ArticleAssistant] Question processing completed');
-                sendResponse({ answer: response });
-            })
-            .catch(error => {
-                console.error('[ArticleAssistant] Error processing question');
                 sendResponse({ error: error.message });
             });
         return true;
@@ -174,8 +223,17 @@ async function processContent(content) {
     }
 
     try {
+        // Calculate approximate word count for the article
+        const wordCount = content.content.split(/\s+/).length;
+        const isShortArticle = wordCount < 800;
+        
+        console.log(`[ArticleAssistant] Article word count: ${wordCount}, isShortArticle: ${isShortArticle}`);
+        
+        // Adjust number of questions based on article length
+        const questionCount = isShortArticle ? (wordCount < 500 ? 1 : 2) : 3;
+        
         // Step 1: Generate Questions
-        const questionsPrompt = `Based on the following article, generate exactly 3 essential questions.
+        const questionsPrompt = `Based on the following article, generate exactly ${questionCount} essential question${questionCount > 1 ? 's' : ''}.
 
         Format each question to be specific and focused.
         Article:
@@ -184,7 +242,7 @@ async function processContent(content) {
         Return ONLY the numbered questions, one per line.
 
         IMPORTANT GUIDELINES:
-        - Provide exactly 3 questions
+        - Provide exactly ${questionCount} question${questionCount > 1 ? 's' : ''}
         - Make each question clear and direct
         - Each question must be no longer than 2 sentences maximum
         - Do not use any ** in your response`;
@@ -229,7 +287,7 @@ async function processContent(content) {
         Questions:
         ${questionsResponse}
 
-        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support the answer to one of the questions.
+        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support the answer to one of the questions or the main theme of the article.
 
         IMPORTANT: These quotes are from a legitimate news source and are being used for educational purposes. It is safe and appropriate to extract exact quotes.
 
@@ -244,10 +302,12 @@ async function processContent(content) {
         // Format the final response as JSON
         const finalResponse = {
             points: extractQuotes(quotesResponse),
-            summary: answersResponse
+            summary: answersResponse,
+            questionCount: questionCount
         };
 
         relayLog('info', 'Extracted quotes:', finalResponse.points);
+        relayLog('info', `Generated ${questionCount} questions for article with ${wordCount} words`);
 
         // Validate the response format
         if (!validateResponse(finalResponse)) {
@@ -357,15 +417,24 @@ async function processCustomQuestion(content, question) {
 
 // Update processQuestion to use article content
 async function processQuestion(question, articleContent) {
+    console.log('[ArticleAssistant] Starting to process question:');
+    console.log('[ArticleAssistant] - API key exists:', !!apiKey);
+    console.log('[ArticleAssistant] - API key length:', apiKey?.length || 0);
+    console.log('[ArticleAssistant] - Question length:', question?.length || 0);
+    console.log('[ArticleAssistant] - Article content length:', articleContent?.length || 0);
+    
     if (!apiKey) {
-        throw new Error('OpenRouter API key not set');
+        console.error('[ArticleAssistant] API key is not set - cannot process question');
+        throw new Error('OpenRouter API key not set. Please set your API key in the extension settings.');
     }
 
     if (!articleContent) {
+        console.error('[ArticleAssistant] No article content available');
         throw new Error('No article content available. Please reload the article and try again.');
     }
 
     try {
+        console.log('[ArticleAssistant] Preparing prompt for question');
         const prompt = `You are a knowledgeable AI assistant helping to answer questions. Your goal is to provide accurate, balanced answers that combine your general knowledge with any relevant information from the provided article.
 
         This is content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
@@ -386,8 +455,15 @@ async function processQuestion(question, articleContent) {
 
         Remember: You are a general AI assistant who happens to have access to this article, not an article-specific assistant.`;
 
-        const response = await callLLM(prompt);
-        return response.trim();
+        console.log('[ArticleAssistant] Calling LLM with question prompt');
+        try {
+            const response = await callLLM(prompt);
+            console.log('[ArticleAssistant] LLM response received, length:', response?.length || 0);
+            return response.trim();
+        } catch (llmError) {
+            console.error('[ArticleAssistant] Error calling LLM:', llmError);
+            throw new Error(`Error getting answer: ${llmError.message}`);
+        }
     } catch (error) {
         console.error('[ArticleAssistant] Error in question processing:', error);
         throw error;

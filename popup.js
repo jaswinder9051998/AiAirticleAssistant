@@ -90,26 +90,47 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         try {
-            debugLog('Saving settings');
+            showStatus('Saving settings...');
+            debugLog('Saving API key and model to storage');
             await chrome.storage.local.set({ apiKey, model });
             
-            // Update the background script with both API key and model
-            await chrome.runtime.sendMessage({ 
-                action: 'setApiKey', 
-                apiKey: apiKey 
-            });
+            // Verify API key was saved
+            const savedSettings = await chrome.storage.local.get(['apiKey']);
+            if (!savedSettings.apiKey) {
+                throw new Error('Failed to save API key to storage');
+            }
             
-            await chrome.runtime.sendMessage({
-                action: 'setModel',
-                model: model
-            });
+            debugLog('Sending API key to background script');
+            // Update the background script with both API key and model
+            try {
+                await chrome.runtime.sendMessage({ 
+                    action: 'setApiKey', 
+                    apiKey: apiKey 
+                });
+                
+                debugLog('API key sent to background script');
+            } catch (msgError) {
+                console.error('[ArticleAssistant] Error sending API key to background:', msgError);
+                throw new Error('Failed to send API key to background script');
+            }
+            
+            try {
+                await chrome.runtime.sendMessage({
+                    action: 'setModel',
+                    model: model
+                });
+                debugLog('Model sent to background script');
+            } catch (msgError) {
+                console.error('[ArticleAssistant] Error sending model to background:', msgError);
+                throw new Error('Failed to send model to background script');
+            }
             
             debugLog('Settings saved successfully');
             updateUIWithApiKey(true);
             showStatus('Settings saved successfully');
         } catch (error) {
             console.error('[ArticleAssistant] Error saving settings:', error);
-            showError('Failed to save settings');
+            showError('Failed to save settings: ' + error.message);
         }
     });
 
