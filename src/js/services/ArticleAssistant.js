@@ -151,28 +151,34 @@ class ArticleAssistant {
 
     createAndShowQuestionBox(selectedText = null) {
         try {
-            // Check for globally stored selected text if none was passed
-            if (!selectedText && window.articleAssistantSelectedText) {
-                selectedText = window.articleAssistantSelectedText;
-                console.log('[ArticleAssistant] Retrieved selected text from global storage:', selectedText.substring(0, 50) + '...');
-            }
-            
-            console.log('[ArticleAssistant] Creating question box with selected text:', selectedText ? 'yes, length: ' + selectedText.length : 'no');
+            console.log('[ArticleAssistant] Creating question box with selected text:', selectedText ? 'yes' : 'no');
             
             // Store the selected text for later use
             this.currentSelectedText = selectedText;
             
-            // Check if the floating card was closed and needs to be reopened
-            if (this.cardWasClosed || !this.floatingCard) {
+            // If the card exists but is minimized, maximize it
+            if (this.floatingCard && this.floatingCard.isMinimized) {
+                console.log('[ArticleAssistant] Card is minimized, maximizing it');
+                this.floatingCard.toggleMinimize();
+            }
+            
+            // If the card doesn't exist or was closed, reopen it
+            if (!this.floatingCard || !this.floatingCard.card || this.cardWasClosed) {
                 console.log('[ArticleAssistant] Card was closed or doesn\'t exist, reopening it');
                 
                 if (this.lastCardData) {
                     console.log('[ArticleAssistant] Recreating card with stored data');
+                    
+                    // If there's an existing floating card, remove it properly
+                    if (this.floatingCard) {
+                        this.floatingCard._originalRemove?.call(this.floatingCard);
+                    }
+                    
                     this.floatingCard = new FloatingCard();
                     
                     // Add a method to track when the card is closed
                     const originalRemove = this.floatingCard.remove;
-                    this.floatingCard._originalRemove = originalRemove; // Store for later use
+                    this.floatingCard._originalRemove = originalRemove;
                     this.floatingCard.remove = () => {
                         console.log('[ArticleAssistant] Floating card being removed, setting cardWasClosed flag');
                         this.cardWasClosed = true;
@@ -278,7 +284,7 @@ class ArticleAssistant {
             
             console.log('[ArticleAssistant] QuestionBox show process completed');
         } catch (error) {
-            console.error('[ArticleAssistant] Error creating/showing question box:', error);
+            console.error('[ArticleAssistant] Error in createAndShowQuestionBox:', error);
         }
     }
 

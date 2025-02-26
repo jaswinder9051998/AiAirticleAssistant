@@ -236,6 +236,15 @@ class FloatingCard {
         title.textContent = 'Executive Summary';
         executiveSummarySection.appendChild(title);
         
+        // Create a container for the points
+        const pointsContainer = document.createElement('div');
+        pointsContainer.className = 'article-assistant-executive-summary-points';
+        pointsContainer.style.margin = '0';
+        pointsContainer.style.padding = '12px 16px';
+        pointsContainer.style.backgroundColor = '#f9f9f9';
+        pointsContainer.style.borderRadius = '8px';
+        pointsContainer.style.border = '1px solid rgba(0, 0, 0, 0.08)';
+        
         // Use the provided executive summary if available, otherwise generate one
         let summaryText = "";
         if (this.executiveSummary) {
@@ -247,20 +256,21 @@ class FloatingCard {
             summaryText = this.generateExecutiveSummary(qaPairs).trim();
         }
         
-        // Ensure the summary doesn't have excessive whitespace or line breaks
-        summaryText = summaryText.replace(/\s+/g, ' ').trim();
+        // Split the summary into points and process each one
+        const points = summaryText.split(/\n+/).filter(point => point.trim());
         
-        // Create a paragraph element for the summary text
-        const summaryParagraph = document.createElement('p');
-        summaryParagraph.className = 'article-assistant-executive-summary-content';
-        summaryParagraph.textContent = summaryText;
-        summaryParagraph.style.margin = '0';
-        summaryParagraph.style.padding = '12px 16px';
-        summaryParagraph.style.backgroundColor = '#f9f9f9';
-        summaryParagraph.style.borderRadius = '8px';
-        summaryParagraph.style.border = '1px solid rgba(0, 0, 0, 0.08)';
+        points.forEach(point => {
+            const pointDiv = document.createElement('div');
+            pointDiv.className = 'article-assistant-executive-summary-point';
+            pointDiv.style.marginBottom = '8px';
+            
+            // Use the same markdown parser as Q&A section
+            pointDiv.innerHTML = this.parseMarkdown(point);
+            
+            pointsContainer.appendChild(pointDiv);
+        });
         
-        executiveSummarySection.appendChild(summaryParagraph);
+        executiveSummarySection.appendChild(pointsContainer);
         return executiveSummarySection;
     }
 
@@ -711,6 +721,11 @@ class FloatingCard {
             
             // Hide the tooltip
             this.selectionTooltip.style.display = 'none';
+            
+            // If the card is minimized, maximize it first
+            if (this.isMinimized) {
+                this.toggleMinimize();
+            }
             
             // Call the onAskButtonClick with the captured text as context
             if (capturedText) {

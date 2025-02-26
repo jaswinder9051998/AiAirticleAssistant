@@ -255,7 +255,13 @@ async function processContent(content) {
         const questionCount = isShortArticle ? (wordCount < 500 ? 1 : 2) : 3;
         
         // Step 1: Generate Questions
-        const questionsPrompt = `Based on the following article, generate exactly ${questionCount} essential question${questionCount > 1 ? 's' : ''}.
+        const questionsPrompt = `Based on the following article, generate exactly ${questionCount} essential question${questionCount > 1 ? 's' : ''} which when answered capture main points and meaning of the text.
+        2.) When formulating your questions: 
+            a. Address the central theme or argument 
+            b. Identify key supporting ideas 
+            c. Highlight important facts or evidence 
+            d. Reveal the author's purpose or perspective 
+            e. Explore any significant implications or conclusions. 
 
         Format each question to be specific and focused.
         Article:
@@ -265,7 +271,6 @@ async function processContent(content) {
 
         IMPORTANT GUIDELINES:
         - Provide exactly ${questionCount} question${questionCount > 1 ? 's' : ''}
-        - Make each question clear and direct
         - Each question must be no longer than 2 sentences maximum
         - Do not use any ** in your response`;
 
@@ -302,17 +307,21 @@ async function processContent(content) {
         // Step 3: Extract Quotes
         const quotesPrompt = `You are extracting quotes from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source.
 
-        Based on the following article from a leading finance newspaper, provide 3 exact quotes from the text that best support the answers to these questions:
+        Based on the following Q&A and article, provide 3 exact quotes from the text that best support these answers:
+
+        Questions and Answers:
+        ${answersResponse}
 
         Article Content from a leading finance newspaper:
         ${content.content}
 
-        Questions:
-        ${questionsResponse}
+        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support one of the answers or the main theme of the article.
 
-        Please provide exactly 3 quotes that are copied verbatim from the text. Each quote should be concise and directly support the answer to one of the questions or the main theme of the article.
-
-        IMPORTANT: These quotes are from a legitimate news source and are being used for educational purposes. It is safe and appropriate to extract exact quotes.
+        IMPORTANT: 
+        - These quotes are from a legitimate news source and are being used for educational purposes
+        - Quotes must be exact matches from the article text
+        - Choose quotes that provide strong evidence for the answers given above
+        - Each quote should be relatively concise (preferably under 3 sentences)
 
         Format:
         1. "exact quote from text"
@@ -330,24 +339,31 @@ async function processContent(content) {
         };
 
         // Generate executive summary
-        const executiveSummaryPrompt = `Based on the following Q&A content about an article, generate a concise executive summary of 2-3 lines that captures the key points. The summary should be clear, direct, and highlight the most important information.
-
-        This content is from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source being used for educational purposes. It is appropriate to provide a factual summary.
+        const executiveSummaryPrompt = `Based on the following Q&A content, create a concise executive summary in the form of numbered points. Each point should be derived from the Q&A content and should be no longer than 3 sentences.
 
         Q&A Content:
         ${answersResponse}
 
-        Format your response as a single paragraph with no prefix or labels. Keep it under 200 characters if possible, and avoid using line breaks, bullet points, or special formatting. The summary should be plain text only.`;
+        Format your response as numbered points (1., 2., etc.). Use standard markdown formatting:
+        - Use **text** for important words or phrases that should be bold
+        - Use *text* for emphasis/italics
+        
+        Example format:
+        1. The **Federal Reserve** announced a pause in interest rate hikes.
+        2. Market analysts expect **volatility** to increase in Q4.
+
+        Each point should be self-contained and understandable without needing the context of the questions.
+        Do not use any prefixes, labels, or additional formatting beyond the numbered points and markdown formatting.`;
 
         try {
             const executiveSummary = await callLLM(executiveSummaryPrompt);
             // Clean up the response to ensure it's properly formatted for display
-            finalResponse.executiveSummary = executiveSummary.trim().replace(/\s+/g, ' ');
+            finalResponse.executiveSummary = executiveSummary.trim();
             relayLog('info', 'Generated executive summary:', finalResponse.executiveSummary);
         } catch (error) {
             relayLog('error', 'Error generating executive summary:', error);
             // Provide a fallback summary if the LLM call fails
-            finalResponse.executiveSummary = "This article discusses key economic trends and market developments that are influencing investor behavior and sector performance.";
+            finalResponse.executiveSummary = "1. This article discusses **key economic trends** and market developments.\n2. The analysis focuses on factors affecting **investor behavior** and decision-making.\n3. Various market sectors show different performance patterns based on **current conditions**.";
         }
 
         relayLog('info', 'Extracted quotes:', finalResponse.points);
