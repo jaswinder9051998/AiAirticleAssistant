@@ -1,5 +1,6 @@
 /* Executive Summary */
-.article-assistant-executive-summary {
+.article-assistant-executive-summary,
+.article-assistant-statistics-section {
     margin: 0 24px 20px 24px;
     padding: 22px;
     background: white;
@@ -20,12 +21,14 @@
     will-change: box-shadow, border-color;
 }
 
-.article-assistant-executive-summary:hover {
+.article-assistant-executive-summary:hover,
+.article-assistant-statistics-section:hover {
     box-shadow: 0 6px 12px rgba(35, 58, 159, 0.06);
     border-color: rgba(66, 133, 244, 0.2);
 }
 
-.article-assistant-executive-summary::after {
+.article-assistant-executive-summary::after,
+.article-assistant-statistics-section::after {
     content: "";
     position: absolute;
     left: 0;
@@ -37,11 +40,12 @@
     opacity: 0.8;
 }
 
-.article-assistant-executive-summary-title {
-    font-weight: 700;
-    color: #4285f4;
+.article-assistant-executive-summary-title,
+.article-assistant-statistics-section h3 {
+    font-weight: 700 !important;
+    color: #4285f4 !important;
     margin-bottom: 12px;
-    font-size: 17px;
+    font-size: 17px !important;
     line-height: 1.5;
     letter-spacing: -0.01em;
     position: relative;
@@ -62,4 +66,79 @@
     padding: 0;
 }
 
-/* Q&A Section */ 
+/* Statistics Section Styles */
+.article-assistant-statistics-section {
+    margin-top: 24px;
+}
+
+/* Force the Key Statistics heading to use Executive Summary styling */
+.article-assistant-statistics-section .article-assistant-executive-summary {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+/* Make sure the title is visible and styled correctly */
+.article-assistant-statistics-section .article-assistant-executive-summary-title {
+    display: block !important;
+    font-weight: 700 !important;
+    color: #4285f4 !important;
+    font-size: 17px !important;
+}
+
+.article-assistant-statistics-section strong,
+.article-assistant-statistics-point strong,
+.article-assistant-statistics-points strong {
+    font-weight: 700 !important;
+    color: #333 !important;
+    display: inline !important;
+}
+
+.article-assistant-statistics-section em,
+.article-assistant-statistics-point em,
+.article-assistant-statistics-points em {
+    font-style: italic !important;
+    color: #444 !important;
+}
+
+.article-assistant-statistics-point {
+    margin-bottom: 8px !important;
+    line-height: 1.5 !important;
+}
+
+/* Section specific styling */
+.article-assistant-statistics-section h4 {
+    color: #4285f4 !important;
+    margin-bottom: 12px !important;
+    font-weight: 700 !important;
+    font-size: 15px !important;
+}
+
+/* Make sure term formatting works correctly */
+.article-assistant-statistics-point strong {
+    display: inline !important;
+}
+
+/* Force statistics numbers to stand out */
+.article-assistant-statistics-section .article-assistant-statistics-point strong {
+    font-weight: 800 !important; 
+    color: #000 !important;
+}
+
+/* Q&A Section */
+
+/* Make sure both sections have consistent styling for points */
+.article-assistant-executive-summary-points,
+.article-assistant-statistics-points {
+    margin: 0;
+    padding: 12px 16px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.article-assistant-executive-summary-point,
+.article-assistant-statistics-point {
+    margin-bottom: 8px !important;
+    line-height: 1.5 !important;
+} 

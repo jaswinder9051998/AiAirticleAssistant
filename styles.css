@@ -486,3 +486,27 @@
     font-weight: 600;
     margin-right: 4px;
 }
+
+/* Executive Summary Formatting */
+.article-assistant-executive-summary-point strong {
+    font-weight: bold;
+}
+
+.article-assistant-executive-summary-point em {
+    font-style: italic;
+}
+
+/* Ensure the styling is visible */
+.article-assistant-executive-summary-points {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.article-assistant-executive-summary-point strong {
+    color: #000;
+    font-weight: 600;
+}
+
+.article-assistant-executive-summary-point em {
+    color: #444;
+    font-style: italic;
+}

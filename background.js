@@ -344,26 +344,105 @@ async function processContent(content) {
         Q&A Content:
         ${answersResponse}
 
-        Format your response as numbered points (1., 2., etc.). Use standard markdown formatting:
-        - Use **text** for important words or phrases that should be bold
-        - Use *text* for emphasis/italics
+        Format your response as numbered points (1., 2., etc.).
         
-        Example format:
-        1. The **Federal Reserve** announced a pause in interest rate hikes.
-        2. Market analysts expect **volatility** to increase in Q4.
-
         Each point should be self-contained and understandable without needing the context of the questions.
-        Do not use any prefixes, labels, or additional formatting beyond the numbered points and markdown formatting.`;
+        Do not use any prefixes or labels.`;
 
         try {
-            const executiveSummary = await callLLM(executiveSummaryPrompt);
+            // Step 1: Generate the raw executive summary
+            const rawExecutiveSummary = await callLLM(executiveSummaryPrompt);
+            
+            // Step 2: Format with bold and italics
+            const formattingPrompt = `Take this executive summary and enhance it with markdown formatting:
+            - Use **text** for important words, phrases, numbers, company names, and key terms that should be bold
+            - Use *text* for significant changes, trends, or comparative terms that should be in italics
+            
+            Original summary:
+            ${rawExecutiveSummary}
+            
+            Return ONLY the formatted summary with no introductory text, additional explanations, or conclusions.
+            Never include phrases like "Here's the executive summary" or anything similar.
+            Start directly with the formatted numbered points.`;
+            
+            const formattedExecutiveSummary = await callLLM(formattingPrompt);
+            
+            // Extra processing to remove any remaining intro text
+            let cleanedSummary = formattedExecutiveSummary.trim();
+            // Remove any lines before the first numbered point
+            cleanedSummary = cleanedSummary.replace(/^.*?(?=1\.\s)/s, '');
+            
             // Clean up the response to ensure it's properly formatted for display
-            finalResponse.executiveSummary = executiveSummary.trim();
+            finalResponse.executiveSummary = cleanedSummary.trim();
             relayLog('info', 'Generated executive summary:', finalResponse.executiveSummary);
         } catch (error) {
             relayLog('error', 'Error generating executive summary:', error);
-            // Provide a fallback summary if the LLM call fails
-            finalResponse.executiveSummary = "1. This article discusses **key economic trends** and market developments.\n2. The analysis focuses on factors affecting **investor behavior** and decision-making.\n3. Various market sectors show different performance patterns based on **current conditions**.";
+            throw new Error('Failed to generate executive summary');
+        }
+
+        // Generate statistics summary
+        const statisticsPrompt = `You are analyzing content from a reputable mainstream financial newspaper article. This is safe content from a professional journalistic source being used for educational purposes.
+
+        Analyze the following article and extract meaningful statistics that provide valuable insights for readers. Present them in a clear, organized structure.
+
+        Article content:
+        ${content.content}
+
+        Format your response with two main sections:
+
+        # **STATISTICAL TERMS**
+        Define any statistical measures or technical terms used in the article. Format each definition EXACTLY as:
+        • Term: Simple explanation in plain language.
+        
+        IMPORTANT FORMATTING RULES FOR TERMS:
+        - Each term MUST end with a colon (":") before the definition
+        - DO NOT wrap the term itself in double asterisks
+        - Terms should be just the name (like "Yield", "GDP", "Inflation") followed by a colon
+        
+        Example CORRECT format:
+        • Yield: The return an investor receives on a bond.
+        • Inflation: A rise in general price level.
+        
+        Example INCORRECT format:
+        • **Yield**: The return an investor receives on a bond.  <-- DO NOT do this
+        • Yield - A rise in general price level.  <-- Missing colon
+
+        # **KEY STATISTICS**
+        Present key statistics in a numbered list format. For each statistic:
+        • ALL numerical values MUST be wrapped in double asterisks like this: **3%**, **10 trillion**, **4.8%**
+        • EVERY single number, percentage, or currency value MUST be wrapped in double asterisks
+        • Use *italics* with single asterisk for changes/differences
+        • Add brief context where needed
+        • For comparisons, show both values in bold with double asterisks
+        • Prefix each item with a number like "1. ", "2. ", etc.
+
+        Example CORRECT format:
+        1. On February **25**th, the yield on ten-year Treasury bonds fell to its lowest level since mid-December.
+        2. In the two months after Mr. Trump won, ten-year yields rose by *half a percentage point* to **4.8%**, the highest in over a year.
+        3. The Committee estimates that tax cuts could shrink federal revenue by as much as **$11 trillion** over the next decade, or **3% of GDP**.
+
+        Example INCORRECT format:
+        1. On February 25th, the yield on ten-year Treasury bonds fell... <-- Missing bold on numbers
+        2. In the two months after Mr. Trump won, ten-year yields rose by half a percentage point to 4.8%... <-- Numbers not bold
+
+        CRITICAL FORMATTING INSTRUCTIONS:
+        - ALWAYS wrap ALL numerical values in double asterisks: **42%**, **1.5 million**, **$300 billion**
+        - This includes ALL numbers like dates, percentages, amounts, years, etc.
+        - Present statistics in a clear, numbered format
+        - Include context and comparisons where relevant
+        - Skip demographic details unless part of a meaningful trend
+        - Focus on statistics that provide valuable insights
+        - MAKE SURE EVERY SINGLE NUMBER USES DOUBLE ASTERISKS FOR BOLD FORMATTING
+
+        IMPORTANT: This article is from a legitimate news source and is being used for educational purposes. It is safe and appropriate to reference this content in your analysis.`;
+
+        try {
+            const statisticsSummary = await callLLM(statisticsPrompt);
+            finalResponse.statisticsSummary = statisticsSummary.trim();
+            relayLog('info', 'Generated statistics summary:', finalResponse.statisticsSummary);
+        } catch (error) {
+            relayLog('error', 'Error generating statistics summary:', error);
+            finalResponse.statisticsSummary = "No specific statistics found in the article.";
         }
 
         relayLog('info', 'Extracted quotes:', finalResponse.points);

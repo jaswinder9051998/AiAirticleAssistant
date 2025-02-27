@@ -9,14 +9,16 @@ class FloatingCard {
         this.selectionTooltip = null;
         this.selectedText = null;
         this.executiveSummary = null;
+        this.statisticsSummary = null;
     }
 
-    create(summary, points, onAskButtonClick, executiveSummary) {
+    create(summary, points, onAskButtonClick, executiveSummary, statisticsSummary) {
         // Remove existing card if any
         this.remove();
 
-        // Store the executive summary
+        // Store the summaries
         this.executiveSummary = executiveSummary;
+        this.statisticsSummary = statisticsSummary;
 
         // Create the card
         this.card = document.createElement('div');
@@ -212,6 +214,10 @@ class FloatingCard {
         const executiveSummarySection = this.createExecutiveSummarySection(summary);
         content.appendChild(executiveSummarySection);
 
+        // Add statistics section
+        const statisticsSection = this.createStatisticsSection();
+        content.appendChild(statisticsSection);
+
         // Add Q&A section
         const qaSection = this.createQASection(summary);
         content.appendChild(qaSection);
@@ -245,16 +251,17 @@ class FloatingCard {
         pointsContainer.style.borderRadius = '8px';
         pointsContainer.style.border = '1px solid rgba(0, 0, 0, 0.08)';
         
-        // Use the provided executive summary if available, otherwise generate one
-        let summaryText = "";
-        if (this.executiveSummary) {
-            // Format the executive summary to ensure it's clean and properly formatted
-            summaryText = this.executiveSummary.trim();
-        } else {
-            // Generate a summary based on the Q&A content if no executive summary is provided
-            const qaPairs = this.extractQAPairs(summary);
-            summaryText = this.generateExecutiveSummary(qaPairs).trim();
-        }
+        // Add a direct test to verify styling works
+        const testElement = document.createElement('div');
+        testElement.style.display = 'none'; // Hide the test element
+        testElement.innerHTML = 'Testing <strong>bold</strong> and <em>italic</em> formatting';
+        pointsContainer.appendChild(testElement);
+        
+        // Use only the provided executive summary
+        const summaryText = this.executiveSummary ? this.executiveSummary.trim() : "No executive summary available.";
+        
+        // Debug the raw summary text
+        console.log('[ArticleAssistant] Raw executive summary:', summaryText);
         
         // Split the summary into points and process each one
         const points = summaryText.split(/\n+/).filter(point => point.trim());
@@ -264,26 +271,55 @@ class FloatingCard {
             pointDiv.className = 'article-assistant-executive-summary-point';
             pointDiv.style.marginBottom = '8px';
             
-            // Use the same markdown parser as Q&A section
-            pointDiv.innerHTML = this.parseMarkdown(point);
+            // Log the original point for debugging
+            console.log('[ArticleAssistant] Processing point:', point);
+            
+            // First try our parseMarkdown function
+            let parsedHtml = this.parseMarkdown(point);
+            
+            // As a failsafe, if we don't see any <strong> or <em> tags but we have ** or * in the original,
+            // manually apply the formatting
+            if ((!parsedHtml.includes('<strong>') && point.includes('**')) || 
+                (!parsedHtml.includes('<em>') && point.includes('*'))) {
+                
+                console.log('[ArticleAssistant] Fallback formatting needed');
+                // First escape HTML
+                let formattedPoint = point
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                
+                // Then handle bold formatting manually
+                formattedPoint = formattedPoint.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                
+                // Then handle italic formatting manually - after bold to avoid conflicts
+                formattedPoint = formattedPoint.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+                
+                parsedHtml = formattedPoint;
+            }
+            
+            // Double-check our result has the expected tags
+            const hasBoldTags = parsedHtml.includes('<strong>');
+            const hasItalicTags = parsedHtml.includes('<em>');
+            console.log('[ArticleAssistant] Formatted HTML contains bold tags:', hasBoldTags);
+            console.log('[ArticleAssistant] Formatted HTML contains italic tags:', hasItalicTags);
+            
+            // Modify to ensure list number style is retained but markdown is processed
+            if (point.match(/^\d+\.\s+/)) {
+                const numberPart = point.match(/^\d+\.\s+/)[0];
+                const contentPart = point.replace(/^\d+\.\s+/, '');
+                const processedContent = this.parseMarkdown(contentPart);
+                pointDiv.innerHTML = numberPart + processedContent;
+            } else {
+                // Set the final HTML directly
+                pointDiv.innerHTML = parsedHtml;
+            }
             
             pointsContainer.appendChild(pointDiv);
         });
         
         executiveSummarySection.appendChild(pointsContainer);
         return executiveSummarySection;
-    }
-
-    generateExecutiveSummary(qaPairs) {
-        // Generate a concise summary based on the Q&A content
-        return "This article discusses key economic trends and market developments that are influencing investor behavior and sector performance.";
-    }
-    
-    // Helper method to extract Q&A pairs from the summary
-    extractQAPairs(summary) {
-        // Extract Q&A content to generate the summary
-        const qaContent = summary.split('💡 MAIN POINTS')[1] || summary;
-        return qaContent.split(/Q:/).filter(pair => pair.trim());
     }
 
     createQASection(summary) {
@@ -338,6 +374,170 @@ class FloatingCard {
         
         quotesSection.appendChild(quotesList);
         return quotesSection;
+    }
+
+    createStatisticsSection() {
+        // Create main container for statistics section
+        const statisticsSection = document.createElement('div');
+        statisticsSection.className = 'article-assistant-quotes-section';
+        statisticsSection.style.borderTop = 'none';
+        statisticsSection.style.marginTop = '24px';
+        
+        // Create a title for the statistics section with same styling as executive summary
+        const title = document.createElement('h3');
+        title.textContent = 'Key Statistics';
+        statisticsSection.appendChild(title);
+        
+        // Create a container for the statistics with identical styling to executive summary points container
+        const statsContainer = document.createElement('div');
+        statsContainer.className = 'article-assistant-executive-summary-points';
+        statsContainer.style.margin = '0';
+        statsContainer.style.padding = '12px 16px';
+        statsContainer.style.backgroundColor = '#f9f9f9';
+        statsContainer.style.borderRadius = '8px';
+        statsContainer.style.border = '1px solid rgba(0, 0, 0, 0.08)';
+        
+        // Add a hidden test element to verify styling works
+        const testElement = document.createElement('div');
+        testElement.style.display = 'none';
+        testElement.innerHTML = 'Testing <strong>bold</strong> and <em>italic</em> formatting';
+        statsContainer.appendChild(testElement);
+        
+        if (this.statisticsSummary && this.statisticsSummary !== "No specific statistics found in the article.") {
+            console.log('[ArticleAssistant] Processing statistics summary:', this.statisticsSummary.substring(0, 100) + '...');
+            
+            // Split the statistics into points and process each one
+            const points = this.statisticsSummary.split(/\n+/).filter(point => point.trim());
+            
+            // Track which section we're currently in
+            let currentSection = "";
+            
+            points.forEach(point => {
+                const pointDiv = document.createElement('div');
+                pointDiv.className = 'article-assistant-executive-summary-point';
+                pointDiv.style.marginBottom = '8px';
+                
+                // Special handling for section headers
+                if (point.includes('**STATISTICAL TERMS**') || point.includes('**KEY STATISTICS**')) {
+                    const header = document.createElement('h4');
+                    if (point.includes('STATISTICAL TERMS')) {
+                        header.textContent = 'STATISTICAL TERMS';
+                        currentSection = "terms";
+                    } else {
+                        header.textContent = 'KEY STATISTICS';
+                        currentSection = "statistics";
+                    }
+                    header.style.color = '#4285f4';
+                    header.style.marginBottom = '12px';
+                    header.style.fontWeight = '700';
+                    header.style.fontSize = '15px';
+                    pointDiv.appendChild(header);
+                } else {
+                    console.log('[ArticleAssistant] Processing point in section:', currentSection, ':', point.substring(0, 50) + '...');
+                    
+                    // Special handling for different sections
+                    if (currentSection === "terms") {
+                        // For terms section, make sure term names are bold
+                        if (point.startsWith('•')) {
+                            // Extract the term and definition
+                            const colonIndex = point.indexOf(':');
+                            if (colonIndex > 0) {
+                                const fullTerm = point.substring(0, colonIndex).trim();
+                                // Extract just the term (without the bullet)
+                                const term = fullTerm.startsWith('•') ? fullTerm.substring(1).trim() : fullTerm;
+                                const definition = point.substring(colonIndex + 1).trim();
+                                
+                                console.log('[ArticleAssistant] Extracted term:', term, 'definition:', definition.substring(0, 30) + '...');
+                                
+                                // Create formatted HTML with the term in bold, with explicit styling to ensure it appears bold
+                                pointDiv.innerHTML = '• <strong style="font-weight: 700 !important; color: #000 !important;">' + term + '</strong>: ' + definition;
+                            } else {
+                                // Fallback to markdown parsing if the format is unexpected
+                                console.log('[ArticleAssistant] Term point without colon, using markdown parser');
+                                pointDiv.innerHTML = this.parseMarkdown(point);
+                            }
+                        } else {
+                            // Use markdown parsing for other points in this section
+                            console.log('[ArticleAssistant] Non-bullet term point, using markdown parser');
+                            pointDiv.innerHTML = this.parseMarkdown(point);
+                        }
+                    } else if (currentSection === "statistics") {
+                        // For statistics section, apply markdown parsing then ensure numbers are bold
+                        
+                        // First apply markdown parsing
+                        let parsedHtml = this.parseMarkdown(point);
+                        console.log('[ArticleAssistant] After markdown parsing:', parsedHtml);
+                        
+                        // Check if we need to manually apply more formatting for numbers
+                        const boldTagCount = (parsedHtml.match(/<strong>/g) || []).length;
+                        console.log('[ArticleAssistant] Bold tag count:', boldTagCount);
+                        
+                        // Apply additional formatting regardless of bold tag count
+                        // Regular expressions for different number formats - making more specific
+                        const percentageRegex = /(\d+(\.\d+)?%)/g;
+                        const currencyRegex = /(\$\d+(\.\d+)?\s*(billion|trillion|million)?)/g;
+                        const decimalRegex = /(\d+\.\d+)/g;
+                        
+                        // Only match numbers not already within HTML tags
+                        const integerRegex = /\b(\d+)\b(?![^<]*>|[^<>]*<\/)/g;
+                        
+                        // Enhanced debug logging
+                        console.log('[ArticleAssistant] Enhancing number formatting');
+                        
+                        // Apply bold formatting to numbers not already in tags, with inline styles to ensure they appear bold
+                        // Handle percentages first (most specific)
+                        parsedHtml = parsedHtml.replace(percentageRegex, function(match) {
+                            if (!match.includes('<strong>')) {
+                                console.log('[ArticleAssistant] Bolding percentage:', match);
+                                return '<strong style="font-weight: 700 !important; color: #000 !important;">' + match + '</strong>';
+                            }
+                            return match;
+                        });
+                        
+                        // Then currencies
+                        parsedHtml = parsedHtml.replace(currencyRegex, function(match) {
+                            if (!match.includes('<strong>')) {
+                                console.log('[ArticleAssistant] Bolding currency:', match);
+                                return '<strong style="font-weight: 700 !important; color: #000 !important;">' + match + '</strong>';
+                            }
+                            return match;
+                        });
+                        
+                        // Then decimals
+                        parsedHtml = parsedHtml.replace(decimalRegex, function(match) {
+                            if (!match.includes('<strong>')) {
+                                console.log('[ArticleAssistant] Bolding decimal:', match);
+                                return '<strong style="font-weight: 700 !important; color: #000 !important;">' + match + '</strong>';
+                            }
+                            return match;
+                        });
+                        
+                        // Then integers (but not inside tags)
+                        parsedHtml = parsedHtml.replace(integerRegex, function(match) {
+                            console.log('[ArticleAssistant] Bolding integer:', match);
+                            return '<strong style="font-weight: 700 !important; color: #000 !important;">' + match + '</strong>';
+                        });
+                        
+                        console.log('[ArticleAssistant] Final formatted HTML:', parsedHtml);
+                        pointDiv.innerHTML = parsedHtml;
+                    } else {
+                        // For any other content, just use markdown parsing
+                        pointDiv.innerHTML = this.parseMarkdown(point);
+                    }
+                }
+                
+                statsContainer.appendChild(pointDiv);
+            });
+        } else {
+            const noStatsDiv = document.createElement('div');
+            noStatsDiv.textContent = "No specific statistics found in the article.";
+            noStatsDiv.style.fontStyle = "italic";
+            noStatsDiv.style.color = "#666";
+            statsContainer.appendChild(noStatsDiv);
+        }
+        
+        statisticsSection.appendChild(statsContainer);
+        return statisticsSection;
     }
 
     addDragHandlers(header) {
@@ -578,39 +778,67 @@ class FloatingCard {
         
         console.log('[ArticleAssistant] Parsing markdown for text:', text.substring(0, 50) + '...');
         
-        // Replace ** or __ for bold
-        let parsed = text.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+        // Test regex functionality with a controlled example
+        const testStr = "This is a **bold** test and this is *italic* test.";
+        const boldTest = testStr.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        const italicTest = boldTest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        console.log('[ArticleAssistant] RegEx test - Original:', testStr);
+        console.log('[ArticleAssistant] RegEx test - After bold:', boldTest);
+        console.log('[ArticleAssistant] RegEx test - After italic:', italicTest);
         
-        // Replace * or _ for italic
-        parsed = parsed.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+        // Escape HTML to prevent XSS
+        let parsed = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+            
+        // First, handle the formatting in a specific order:
         
-        // Replace backticks for code
+        // 1. Extract and temporarily store code blocks to avoid formatting their contents
+        const codeBlocks = [];
+        parsed = parsed.replace(/```([\s\S]*?)```/g, (match, code) => {
+            codeBlocks.push(code);
+            return '%%%CODE_BLOCK_' + (codeBlocks.length - 1) + '%%%';
+        });
+        
+        // 2. Handle bold formatting - must be done before italic to avoid conflicts
+        parsed = parsed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        
+        // 3. Handle italic formatting
+        parsed = parsed.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        
+        // Log intermediate results
+        console.log('[ArticleAssistant] After bold/italic parsing:', parsed.substring(0, 50) + '...');
+        
+        // 4. Replace backticks for inline code
         parsed = parsed.replace(/`([^`]+)`/g, '<code>$1</code>');
         
-        // Replace triple backticks for code blocks
-        parsed = parsed.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        // 5. Restore code blocks
+        parsed = parsed.replace(/%%%CODE_BLOCK_(\d+)%%%/g, (match, index) => {
+            return '<pre><code>' + codeBlocks[index] + '</code></pre>';
+        });
         
-        // Replace bullet points
+        // 6. Replace bullet points
         parsed = parsed.replace(/^\s*[\*\-]\s+(.*?)$/gm, '<li>$1</li>');
         
-        // Wrap adjacent list items in ul tags
+        // 7. Wrap adjacent list items in ul tags
         parsed = parsed.replace(/(<li>.*?<\/li>)(?:\s*\n\s*)?(?=<li>)/g, '$1');
         parsed = parsed.replace(/(?:^|\n)(<li>.*?<\/li>)(?:\s*\n\s*)?(?:<li>.*?<\/li>)*/g, '\n<ul>$&\n</ul>');
         
-        // Replace numbered lists
+        // 8. Replace numbered lists
         parsed = parsed.replace(/^\s*(\d+)\.\s+(.*?)$/gm, '<li>$2</li>');
         
-        // Replace headers (## Header)
+        // 9. Replace headers (## Header)
         parsed = parsed.replace(/^##\s+(.*?)$/gm, '<h2>$1</h2>');
         parsed = parsed.replace(/^###\s+(.*?)$/gm, '<h3>$1</h3>');
         
-        // Replace paragraphs (lines with a blank line before and after)
+        // 10. Replace paragraphs (lines with a blank line before and after)
         parsed = parsed.replace(/\n\n([^<].*?)\n\n/g, '\n\n<p>$1</p>\n\n');
         
-        // Replace single newlines with <br>
+        // 11. Replace single newlines with <br>
         parsed = parsed.replace(/([^>\n])\n([^<])/g, '$1<br>$2');
         
-        console.log('[ArticleAssistant] Parsed markdown result:', parsed.substring(0, 50) + '...');
+        console.log('[ArticleAssistant] Final parsed markdown result:', parsed.substring(0, 50) + '...');
         
         return parsed;
     }

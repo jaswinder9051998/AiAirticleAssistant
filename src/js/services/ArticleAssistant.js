@@ -50,7 +50,8 @@ class ArticleAssistant {
             this.lastCardData = {
                 summary: response.summary,
                 points: response.points,
-                executiveSummary: response.executiveSummary || "This article discusses key economic and market trends affecting investor behavior."
+                executiveSummary: response.executiveSummary || "This article discusses key economic and market trends affecting investor behavior.",
+                statisticsSummary: response.statisticsSummary || "No statistics available for this article."
             };
             
             // Reset the closed state when creating a new card
@@ -69,10 +70,11 @@ class ArticleAssistant {
             };
             
             this.floatingCard.create(
-                response.summary, 
-                response.points,
+                this.lastCardData.summary, 
+                this.lastCardData.points,
                 () => this.createAndShowQuestionBox(),
-                response.executiveSummary
+                this.lastCardData.executiveSummary,
+                this.lastCardData.statisticsSummary
             );
 
             // Process highlights
@@ -189,7 +191,8 @@ class ArticleAssistant {
                         this.lastCardData.summary,
                         this.lastCardData.points,
                         () => this.createAndShowQuestionBox(),
-                        this.lastCardData.executiveSummary
+                        this.lastCardData.executiveSummary,
+                        this.lastCardData.statisticsSummary
                     );
                     
                     // Reset the closed state
@@ -202,7 +205,8 @@ class ArticleAssistant {
                         "Article Assistant",
                         [],
                         () => this.createAndShowQuestionBox(),
-                        "No summary available for this article."
+                        "No executive summary available.",
+                        "No statistics available for this article."
                     );
                 }
             }
